@@ -142,11 +142,13 @@
   }
 
   .hover-lift {
-    @apply transition-all duration-300 ease-spring hover:-translate-y-1 hover:shadow-elevated;
+    @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-elevated;
+    transition-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1.5);
   }
 
   .button-animation {
-    @apply transition-all duration-300 ease-spring active:scale-95;
+    @apply transition-all duration-300 active:scale-95;
+    transition-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1.5);
   }
 }
 
