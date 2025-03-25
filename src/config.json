@@ -1,0 +1,8 @@
+
+{
+  "db-uri": "postgres://postgres.lmizrylbhbapimyuyajc:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxtaXpyeWxiaGJhcGlteXV5YWpjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI4NTE3MTYsImV4cCI6MjA1ODQyNzcxNn0.fiu4Wg4WEh0kZLWYPA9ICI6ilzmJGcuNjWFLVh_UpOw@db.lmizrylbhbapimyuyajc.supabase.co:5432/postgres",
+  "db-schema": "public",
+  "db-anon-role": "anon",
+  "server-host": "!4",
+  "server-port": 3000
+}
