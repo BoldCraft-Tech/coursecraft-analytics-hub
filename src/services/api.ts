@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -48,6 +47,7 @@ export const courseService = {
   
   getAIRecommendations: async (interests?: string, level?: string, userPreferences?: any) => {
     try {
+      // Try getting recommendations from Supabase Edge Function
       const { data } = await axios.post(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-recommendations`,
         { interests, level, userPreferences },
@@ -60,9 +60,20 @@ export const courseService = {
       );
       return data;
     } catch (error) {
-      console.error('Error fetching AI recommendations:', error);
-      // Fallback to regular recommendations
-      return courseService.getRecommendations(interests, level);
+      console.error('Error fetching from Supabase AI recommendations:', error);
+      try {
+        // Fallback to NestJS backend
+        const response = await api.post('/courses/ai-recommendations', { 
+          interests, 
+          level, 
+          userPreferences 
+        });
+        return response.data;
+      } catch (nestError) {
+        console.error('Error fetching from NestJS AI recommendations:', nestError);
+        // Final fallback to regular recommendations
+        return courseService.getRecommendations(interests, level);
+      }
     }
   },
   

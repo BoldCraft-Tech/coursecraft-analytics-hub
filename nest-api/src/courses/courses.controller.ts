@@ -38,7 +38,7 @@ export class CoursesController {
     );
   }
 
-  @Get('ai-recommendations')
+  @Post('ai-recommendations')
   @ApiOperation({ summary: 'Get AI-powered course recommendations' })
   @ApiResponse({ status: 200, description: 'Return AI course recommendations' })
   getAIRecommendations(@Body() courseRecommendationDto: CourseRecommendationDto) {
