@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
@@ -6,9 +7,11 @@ import AIRecommendations from '@/components/courses/AIRecommendations';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Bot, SendHorizontal } from 'lucide-react';
+import { Bot, SendHorizontal, Search } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
+import CourseGrid from '@/components/courses/CourseGrid';
+import { courseService } from '@/services/api';
 
 const CATEGORY_KEYWORDS = {
   Technology: ['technology', 'tech', 'software', 'coding', 'programming', 'computer', 'digital', 'web', 'app', 'mobile', 'data', 'online', 'internet', 'it'],
@@ -31,6 +34,9 @@ const Learning = () => {
   const [level, setLevel] = useState<string>('Beginner');
   const [keywords, setKeywords] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchPerformed, setSearchPerformed] = useState(false);
+  const [matchedCourses, setMatchedCourses] = useState<any[]>([]);
+  const [isLoadingCourses, setIsLoadingCourses] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -44,6 +50,32 @@ const Learning = () => {
       if (extractedLevel) setLevel(extractedLevel);
     }
   }, [keywords]);
+
+  // Fetch courses when interests or level change and a search has been performed
+  useEffect(() => {
+    if (searchPerformed && (interests || level)) {
+      fetchMatchingCourses();
+    }
+  }, [interests, level, searchPerformed]);
+
+  const fetchMatchingCourses = async () => {
+    setIsLoadingCourses(true);
+    try {
+      const data = await courseService.getAIRecommendations(interests, level);
+      if (data && data.recommendations) {
+        setMatchedCourses(data.recommendations);
+      }
+    } catch (error) {
+      console.error('Error fetching courses based on chat:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch matching courses. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingCourses(false);
+    }
+  };
 
   const handleMessageSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,6 +95,8 @@ const Learning = () => {
       
       if (extractedInterests) setInterests(extractedInterests);
       if (extractedLevel) setLevel(extractedLevel);
+      
+      setSearchPerformed(true);
       
       const responseText = generateResponse(extractedInterests, extractedLevel, extractedKeywords);
       
@@ -136,7 +170,7 @@ const Learning = () => {
       response += ` Based on keywords like "${keywordPreview}", I've tailored these recommendations for you.`;
     }
     
-    response += " Take a look at the recommendations below.";
+    response += " Take a look at the courses below.";
     return response;
   };
 
@@ -209,7 +243,30 @@ const Learning = () => {
             </div>
             
             <div className={`${isMobile ? 'order-1' : 'order-2'} lg:col-span-2`}>
-              <AIRecommendations interests={interests} level={level} />
+              {searchPerformed ? (
+                <Card className="shadow-sm">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center text-xl">
+                      <Search className="h-5 w-5 mr-2 text-primary" />
+                      Courses For You
+                    </CardTitle>
+                    <CardDescription>
+                      {matchedCourses.length > 0 
+                        ? `Found ${matchedCourses.length} ${interests ? interests : ''} courses ${level ? `for ${level} level` : ''}`
+                        : 'Searching for matching courses...'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <CourseGrid 
+                      courses={matchedCourses}
+                      loading={isLoadingCourses}
+                      emptyMessage="No courses found matching your request. Try a different topic or level."
+                    />
+                  </CardContent>
+                </Card>
+              ) : (
+                <AIRecommendations interests={interests} level={level} />
+              )}
             </div>
           </div>
         </div>
