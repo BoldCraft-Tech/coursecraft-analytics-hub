@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -54,6 +55,11 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
 
       // Update UI through callback
       onLessonComplete(lessonId, !currentStatus);
+      
+      toast({
+        title: !currentStatus ? 'Lesson marked as complete' : 'Lesson marked as incomplete',
+        description: !currentStatus ? 'Your progress has been updated' : 'Lesson has been marked as incomplete',
+      });
     } catch (error: any) {
       console.error('Error updating lesson progress:', error);
       toast({

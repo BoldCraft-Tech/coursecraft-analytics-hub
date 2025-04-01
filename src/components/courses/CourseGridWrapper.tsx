@@ -18,8 +18,8 @@ const CourseGridWrapper: React.FC<CourseGridWrapperProps> = ({
   description
 }) => {
   return (
-    <div>
-      {title && <h2 className="text-xl font-semibold mb-2">{title}</h2>}
+    <div className="space-y-4">
+      {title && <h2 className="text-xl font-semibold">{title}</h2>}
       {description && <p className="text-muted-foreground mb-4">{description}</p>}
       
       <CourseGrid 
