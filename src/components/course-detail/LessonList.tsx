@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { CheckCircle, Circle, Clock, Play, Lock } from 'lucide-react';
+import { CheckCircle, Circle, Clock, Play, Lock, Video } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,6 +15,7 @@ interface Lesson {
   duration: number;
   order_index: number;
   completed?: boolean;
+  video_url?: string;
 }
 
 interface LessonListProps {
@@ -125,6 +126,9 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
                   <Lock className="h-4 w-4 mr-3 text-muted-foreground" />
                 )}
                 <span className="text-sm font-medium">{lesson.order_index}. {lesson.title}</span>
+                {lesson.video_url && (
+                  <Video className="h-3 w-3 ml-2 text-blue-500" />
+                )}
               </div>
               <div className="flex items-center text-xs text-muted-foreground">
                 <Clock className="h-3 w-3 mr-1" />

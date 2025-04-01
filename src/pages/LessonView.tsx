@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
@@ -16,6 +17,7 @@ interface Lesson {
   duration: number;
   order_index: number;
   completed?: boolean;
+  video_url?: string;
 }
 
 interface LessonNavigation {
@@ -116,25 +118,31 @@ const LessonView = () => {
           }
           
           // Update last accessed timestamp (don't await to avoid blocking UI)
-          const accessUpdate = supabase
-            .from('user_lesson_progress')
-            .upsert({
-              user_id: user.id,
-              lesson_id: lessonId,
-              last_accessed: new Date().toISOString(),
-              completed: progressData?.completed || false
-            });
-            
-          accessUpdate.then(() => {
-            // Update enrollment last_accessed
-            return supabase
-              .from('enrollments')
-              .update({ last_accessed: new Date().toISOString() })
-              .eq('user_id', user.id)
-              .eq('course_id', courseId);
-          }).catch(error => {
-            console.error('Error updating last accessed:', error);
-          });
+          const updateLastAccessed = async () => {
+            try {
+              // Update lesson progress
+              await supabase
+                .from('user_lesson_progress')
+                .upsert({
+                  user_id: user.id,
+                  lesson_id: lessonId,
+                  last_accessed: new Date().toISOString(),
+                  completed: progressData?.completed || false
+                });
+                
+              // Update enrollment last_accessed
+              await supabase
+                .from('enrollments')
+                .update({ last_accessed: new Date().toISOString() })
+                .eq('user_id', user.id)
+                .eq('course_id', courseId);
+            } catch (error) {
+              console.error('Error updating last accessed:', error);
+            }
+          };
+          
+          // Execute the update in the background
+          updateLastAccessed();
         }
       } catch (error: any) {
         console.error('Error fetching lesson details:', error);
@@ -323,10 +331,23 @@ const LessonView = () => {
           <div className="bg-card border rounded-lg p-6 mb-8">
             <div className="prose max-w-none">
               <div className="min-h-[300px]">
-                {/* Here would be the actual lesson content, potentially video or interactive content */}
-                <div className="p-8 bg-muted/30 rounded-lg flex items-center justify-center mb-6">
-                  <Play className="h-12 w-12 text-primary" />
-                </div>
+                {/* Video lesson content */}
+                {lesson.video_url ? (
+                  <div className="aspect-video mb-6">
+                    <iframe
+                      src={lesson.video_url}
+                      className="w-full h-full rounded-lg"
+                      title={lesson.title}
+                      allowFullScreen
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    ></iframe>
+                  </div>
+                ) : (
+                  <div className="p-8 bg-muted/30 rounded-lg flex items-center justify-center mb-6">
+                    <Play className="h-12 w-12 text-primary" />
+                  </div>
+                )}
                 
                 <h2 className="text-xl font-semibold mb-4">Lesson Content</h2>
                 <div className="whitespace-pre-wrap">
