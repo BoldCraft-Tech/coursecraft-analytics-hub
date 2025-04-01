@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { Search, Robot } from 'lucide-react';
+import { Search, Bot } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 
@@ -260,7 +260,7 @@ const Courses = () => {
                   disabled={loading}
                   className="bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
-                  <Robot className="mr-2 h-4 w-4" />
+                  <Bot className="mr-2 h-4 w-4" />
                   Get AI Recommendations
                 </Button>
               </div>
@@ -269,7 +269,7 @@ const Courses = () => {
               {showingRecommendations && aiRecommendations && (
                 <div className="mt-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
                   <div className="flex items-start">
-                    <Robot className="h-5 w-5 text-indigo-600 mt-0.5 mr-2" />
+                    <Bot className="h-5 w-5 text-indigo-600 mt-0.5 mr-2" />
                     <p className="text-sm text-indigo-800">{aiRecommendations.message}</p>
                   </div>
                 </div>
