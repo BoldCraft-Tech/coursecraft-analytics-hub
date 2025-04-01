@@ -1,6 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,67 +10,72 @@ const corsHeaders = {
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
+    // Create a Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') as string;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') as string;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+    // Get request data
     const { interests, level } = await req.json();
 
-    // Create a client with the supabaseKey
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') || 'https://lmizrylbhbapimyuyajc.supabase.co';
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Query courses based on user interests and level
-    let query = supabase.from('courses').select('*');
-    
-    if (interests) {
-      // If interests are provided, use them to filter
-      query = query.ilike('category', `%${interests}%`);
-    }
-    
-    if (level && level !== 'all-levels') {
-      // If level is provided and not 'all-levels', filter by level
-      query = query.eq('level', level);
-    }
-    
-    // Limit to 3 courses for recommendations
-    const { data: courses, error } = await query.limit(3);
+    // Fetch all courses
+    const { data: courses, error } = await supabase
+      .from('courses')
+      .select('*');
 
     if (error) throw error;
 
-    // Prepare AI-style recommendation message
-    const recommendationMessage = generateRecommendationMessage(courses, interests, level);
+    // Filter courses based on user preferences
+    let filteredCourses = [...courses];
+    
+    if (interests) {
+      filteredCourses = filteredCourses.filter(
+        course => course.category.toLowerCase() === interests.toLowerCase()
+      );
+    }
+    
+    if (level) {
+      filteredCourses = filteredCourses.filter(
+        course => course.level.toLowerCase() === level.toLowerCase()
+      );
+    }
+
+    // If no courses match the filters, return a subset of all courses
+    if (filteredCourses.length === 0) {
+      filteredCourses = courses.slice(0, 3);
+    } else if (filteredCourses.length > 5) {
+      // Limit to 5 recommendations if there are many matches
+      filteredCourses = filteredCourses.slice(0, 5);
+    }
+
+    // Generate a recommendation message based on filters
+    let message = "Based on your interests";
+    if (interests) message += ` in ${interests}`;
+    if (level) message += ` and ${level} level`;
+    message += ", I recommend these courses to help you develop valuable skills for rural areas.";
 
     return new Response(
       JSON.stringify({
-        recommendations: courses,
-        message: recommendationMessage
+        recommendations: filteredCourses,
+        message: message
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      }
     );
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error generating recommendations:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
       }
     );
   }
 });
-
-// Helper function to generate personalized recommendation messages
-function generateRecommendationMessage(courses, interests, level) {
-  if (courses.length === 0) {
-    return "I couldn't find any courses matching your criteria. Consider broadening your search.";
-  }
-
-  const levelPhrase = level && level !== 'all-levels' ? `${level} level` : 'all levels';
-  const interestsPhrase = interests ? `related to ${interests}` : 'across various categories';
-  
-  const courseNames = courses.map(course => `"${course.title}"`).join(', ');
-  
-  return `Based on your interest in ${interestsPhrase} at ${levelPhrase}, I recommend checking out ${courseNames}. These courses are tailored to help you develop skills in this area.`;
-}

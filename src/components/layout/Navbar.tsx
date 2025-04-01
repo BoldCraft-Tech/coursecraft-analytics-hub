@@ -2,12 +2,20 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Menu, X, ChevronDown } from 'lucide-react';
+import { Menu, X, ChevronDown, User } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const location = useLocation();
+  const { user, signOut } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -45,6 +53,13 @@ const Navbar = () => {
         { name: 'Community', path: '/community' },
       ] 
     },
+  ];
+
+  const authLinks = [
+    { name: 'Dashboard', path: '/dashboard' },
+    { name: 'My Learning', path: '/learning' },
+    { name: 'My Courses', path: '/my-courses' },
+    { name: 'Certificates', path: '/certificates' },
   ];
 
   return (
@@ -96,20 +111,59 @@ const Navbar = () => {
                 </Link>
               )
             ))}
+
+            {/* Show these links only when user is authenticated */}
+            {user && authLinks.map((link) => (
+              <Link 
+                key={link.name} 
+                to={link.path} 
+                className={`text-foreground/80 hover:text-foreground transition-colors ${
+                  location.pathname === link.path ? 'text-foreground font-medium' : ''
+                }`}
+              >
+                {link.name}
+              </Link>
+            ))}
           </nav>
 
           {/* Auth Actions */}
           <div className="hidden md:flex items-center space-x-4">
-            <Link to="/signin">
-              <Button variant="ghost" size="sm" className="button-animation">
-                Sign In
-              </Button>
-            </Link>
-            <Link to="/signup">
-              <Button size="sm" className="button-animation">
-                Sign Up
-              </Button>
-            </Link>
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="rounded-full h-10 w-10 p-0">
+                    <User className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem asChild>
+                    <Link to="/dashboard" className="cursor-pointer w-full">Dashboard</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/learning" className="cursor-pointer w-full">My Learning</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/certificates" className="cursor-pointer w-full">Certificates</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={signOut} className="text-red-500 cursor-pointer">
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <>
+                <Link to="/signin">
+                  <Button variant="ghost" size="sm" className="button-animation">
+                    Sign In
+                  </Button>
+                </Link>
+                <Link to="/signup">
+                  <Button size="sm" className="button-animation">
+                    Sign Up
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -130,6 +184,7 @@ const Navbar = () => {
         } transition-all duration-300 ease-in-out overflow-hidden bg-background border-t border-border`}
       >
         <div className="container mx-auto px-4 py-4 space-y-4">
+          {/* Regular nav links */}
           {navLinks.map((link) => (
             <div key={link.name}>
               {link.dropdown ? (
@@ -160,18 +215,43 @@ const Navbar = () => {
               )}
             </div>
           ))}
-          <div className="pt-4 space-y-3 border-t border-border">
-            <Link to="/signin" className="block">
-              <Button variant="outline" size="sm" className="w-full button-animation">
-                Sign In
-              </Button>
-            </Link>
-            <Link to="/signup" className="block">
-              <Button size="sm" className="w-full button-animation">
-                Sign Up
-              </Button>
-            </Link>
-          </div>
+
+          {/* Auth links for mobile */}
+          {user ? (
+            <>
+              <div className="pt-4 border-t border-border">
+                <div className="font-medium mb-2">Account</div>
+                {authLinks.map((link) => (
+                  <Link 
+                    key={link.name}
+                    to={link.path}
+                    className="block py-2 pl-2 text-foreground/80 hover:text-foreground transition-colors"
+                  >
+                    {link.name}
+                  </Link>
+                ))}
+                <button 
+                  onClick={signOut}
+                  className="block w-full text-left py-2 pl-2 text-red-500 hover:text-red-600 transition-colors"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="pt-4 space-y-3 border-t border-border">
+              <Link to="/signin" className="block">
+                <Button variant="outline" size="sm" className="w-full button-animation">
+                  Sign In
+                </Button>
+              </Link>
+              <Link to="/signup" className="block">
+                <Button size="sm" className="w-full button-animation">
+                  Sign Up
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
       </div>
     </header>

@@ -1,5 +1,6 @@
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,110 +10,71 @@ const corsHeaders = {
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // Create a client with the supabaseKey
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') || 'https://lmizrylbhbapimyuyajc.supabase.co';
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Create a Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') as string;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') as string;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-    const sampleCourses = [
-      {
-        title: 'Sustainable Farming Techniques',
-        description: 'Learn modern and sustainable methods to improve crop yields while protecting the environment.',
-        category: 'Agriculture',
-        level: 'Beginner',
-        duration: '6 weeks',
-        students: 1250,
-        lessons: 24,
-      },
-      {
-        title: 'Digital Marketing for Small Businesses',
-        description: 'Master digital marketing strategies to grow your business in rural markets.',
-        category: 'Business',
-        level: 'Intermediate',
-        duration: '8 weeks',
-        students: 845,
-        lessons: 32,
-      },
-      {
-        title: 'Community Healthcare Basics',
-        description: 'Essential healthcare knowledge for community health workers in rural areas.',
-        category: 'Healthcare',
-        level: 'Beginner',
-        duration: '4 weeks',
-        students: 1632,
-        lessons: 18,
-      },
-      {
-        title: 'Rural Entrepreneurship',
-        description: 'Start and grow a successful business in rural settings with limited resources.',
-        category: 'Business',
-        level: 'Advanced',
-        duration: '10 weeks',
-        students: 720,
-        lessons: 42,
-      },
-      {
-        title: 'Renewable Energy Solutions',
-        description: 'Practical guide to implementing renewable energy systems in off-grid communities.',
-        category: 'Technology',
-        level: 'Intermediate',
-        duration: '7 weeks',
-        students: 530,
-        lessons: 28,
-      },
-      {
-        title: 'Water Conservation and Management',
-        description: 'Techniques for efficient water usage and conservation in drought-prone areas.',
-        category: 'Environment',
-        level: 'Beginner',
-        duration: '5 weeks',
-        students: 915,
-        lessons: 20,
-      },
-    ];
+    // Get request data
+    const { courseId, numLessons = 5 } = await req.json();
 
-    // Delete existing courses (optional - remove if you want to keep existing data)
-    const { error: deleteError } = await supabase
-      .from('courses')
-      .delete()
-      .gte('id', '0'); // Delete all records
-    
-    if (deleteError) {
-      throw deleteError;
+    if (!courseId) {
+      throw new Error('Course ID is required');
     }
 
-    // Insert sample courses
-    const { data, error } = await supabase
+    // Check if course exists
+    const { data: course, error: courseError } = await supabase
       .from('courses')
-      .insert(sampleCourses)
-      .select();
-    
-    if (error) {
-      throw error;
+      .select('*')
+      .eq('id', courseId)
+      .single();
+
+    if (courseError) throw courseError;
+    if (!course) throw new Error('Course not found');
+
+    // Count existing lessons
+    const { count: existingLessons, error: countError } = await supabase
+      .from('lessons')
+      .select('*', { count: 'exact', head: true })
+      .eq('course_id', courseId);
+
+    if (countError) throw countError;
+    if (existingLessons && existingLessons > 0) {
+      throw new Error('Course already has lessons');
     }
+
+    // Call the database function to seed lessons
+    const { data, error } = await supabase.rpc(
+      'seed_course_lessons',
+      { course_id: courseId, num_lessons: numLessons }
+    );
+
+    if (error) throw error;
+
+    // Update course with number of lessons
+    await supabase
+      .from('courses')
+      .update({ lessons: numLessons })
+      .eq('id', courseId);
 
     return new Response(
-      JSON.stringify({ 
-        success: true,
-        message: 'Sample courses added successfully',
-        courses: data
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: true, message: `${numLessons} lessons created for course ${courseId}` }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      }
     );
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error seeding course lessons:', error);
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message 
-      }),
+      JSON.stringify({ error: error.message }),
       { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
       }
     );
   }
