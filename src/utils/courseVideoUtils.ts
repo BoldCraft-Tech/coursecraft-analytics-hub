@@ -161,12 +161,15 @@ const updateCourseProgress = async (userId: string, courseId: string): Promise<v
     const lessonIds = totalLessonsData.map(lesson => lesson.id);
     
     // Get completed lessons for this user and course
+    // Fix the ambiguous column issue by explicitly specifying lesson.course_id
     const { data: completedLessonsData, error: completedError } = await supabase
       .from('user_lesson_progress')
-      .select('lesson_id')
-      .eq('user_id', userId)
+      .select('user_lesson_progress.lesson_id')
+      .eq('user_lesson_progress.user_id', userId)
       .eq('completed', true)
-      .in('lesson_id', lessonIds);
+      .in('lesson_id', lessonIds)
+      .join('lessons', 'user_lesson_progress.lesson_id = lessons.id')
+      .eq('lessons.course_id', courseId);
       
     if (completedError) throw completedError;
     
@@ -195,4 +198,4 @@ const updateCourseProgress = async (userId: string, courseId: string): Promise<v
   }
 };
 
-// Removed duplicate exports here - these functions are already exported above
+// No duplicate exports - just let the original export declarations work

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -133,33 +132,97 @@ const useCourseDetail = (courseId: string | undefined) => {
     fetchCourseDetails();
   }, [courseId, user, toast]);
 
-  const handleEnrollmentChange = (enrolled: boolean) => {
+  const handleEnrollmentChange = async (enrolled: boolean) => {
     if (enrolled && !enrollment) {
-      setEnrollment({
-        id: 'new-enrollment',
-        progress: 0,
-        completed: false
-      });
+      try {
+        if (user && courseId) {
+          console.log('Creating new enrollment for user:', user.id, 'course:', courseId);
+          
+          const { data, error } = await supabase
+            .from('enrollments')
+            .insert({
+              user_id: user.id,
+              course_id: courseId,
+              progress: 0,
+              completed: false
+            })
+            .select();
+            
+          if (error) throw error;
+          
+          if (data && data[0]) {
+            setEnrollment({
+              id: data[0].id,
+              progress: 0,
+              completed: false
+            });
+            
+            toast({
+              title: 'Successfully enrolled',
+              description: 'You are now enrolled in this course',
+            });
+          }
+        }
+      } catch (error: any) {
+        console.error('Error enrolling in course:', error);
+        toast({
+          title: 'Enrollment failed',
+          description: error.message || 'Please try again later',
+          variant: 'destructive',
+        });
+      }
     } else if (!enrolled && enrollment) {
-      setEnrollment(null);
-      setCompletedLessons(0);
-      
-      setLessons(prev => prev.map(lesson => ({
-        ...lesson,
-        completed: false
-      })));
+      try {
+        if (user && courseId) {
+          console.log('Deleting enrollment for user:', user.id, 'course:', courseId);
+          
+          const { data: enrollmentData, error: findError } = await supabase
+            .from('enrollments')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('course_id', courseId)
+            .single();
+            
+          if (findError) throw findError;
+          
+          const { error: deleteError } = await supabase
+            .from('enrollments')
+            .delete()
+            .eq('id', enrollmentData.id);
+            
+          if (deleteError) throw deleteError;
+          
+          setEnrollment(null);
+          setCompletedLessons(0);
+          
+          setLessons(prev => prev.map(lesson => ({
+            ...lesson,
+            completed: false
+          })));
+          
+          toast({
+            title: 'Unenrolled successfully',
+            description: 'You have been unenrolled from this course',
+          });
+        }
+      } catch (error: any) {
+        console.error('Error unenrolling from course:', error);
+        toast({
+          title: 'Unenrollment failed',
+          description: error.message || 'Please try again later',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
   const handleLessonComplete = async (lessonId: string, completed: boolean) => {
-    // Update local state first
     setLessons(prev => prev.map(lesson => 
       lesson.id === lessonId 
         ? { ...lesson, completed } 
         : lesson
     ));
     
-    // Update completed lessons count
     const newCompletedCount = completed 
       ? completedLessons + 1 
       : Math.max(0, completedLessons - 1);
@@ -170,7 +233,6 @@ const useCourseDetail = (courseId: string | undefined) => {
       const progressPercentage = Math.round((newCompletedCount / lessons.length) * 100);
       
       if (enrollment) {
-        // Update local enrollment state
         setEnrollment(prev => prev ? {
           ...prev,
           progress: progressPercentage,
@@ -180,7 +242,6 @@ const useCourseDetail = (courseId: string | undefined) => {
         if (!user || !courseId) return;
         
         try {
-          // Update enrollment in database
           await supabase
             .from('enrollments')
             .update({ 
@@ -191,7 +252,6 @@ const useCourseDetail = (courseId: string | undefined) => {
             .eq('user_id', user.id)
             .eq('course_id', courseId);
             
-          // If all lessons are completed and no certificate exists, generate one
           if (progressPercentage === 100 && !certificateId) {
             await generateCertificate();
           }
@@ -208,7 +268,6 @@ const useCourseDetail = (courseId: string | undefined) => {
     setLoadingCertificate(true);
     
     try {
-      // First, double-check all lessons are completed by querying the database directly
       const { data: lessonData, error: lessonError } = await supabase
         .from('lessons')
         .select('id')
@@ -228,7 +287,6 @@ const useCourseDetail = (courseId: string | undefined) => {
         return;
       }
       
-      // Get user's completed lessons for this course
       const { data: progressData, error: progressError } = await supabase
         .from('user_lesson_progress')
         .select('lesson_id, completed')
@@ -238,7 +296,6 @@ const useCourseDetail = (courseId: string | undefined) => {
         
       if (progressError) throw progressError;
       
-      // Extract the completed lesson IDs
       const completedLessonIds = progressData.map(progress => progress.lesson_id);
       
       console.log('Certificate generation check:', {
@@ -248,7 +305,6 @@ const useCourseDetail = (courseId: string | undefined) => {
         allCompleted: lessonIds.every(id => completedLessonIds.includes(id))
       });
       
-      // Check if any lessons aren't completed
       const incompleteCount = lessonIds.length - completedLessonIds.length;
       if (incompleteCount > 0) {
         toast({
@@ -260,7 +316,6 @@ const useCourseDetail = (courseId: string | undefined) => {
         return;
       }
       
-      // Mark all lessons as completed in the database as a safety measure
       for (const lessonId of lessonIds) {
         await supabase
           .from('user_lesson_progress')
@@ -272,7 +327,6 @@ const useCourseDetail = (courseId: string | undefined) => {
           }, { onConflict: 'user_id,lesson_id' });
       }
       
-      // Update enrollment progress to 100%
       await supabase
         .from('enrollments')
         .update({ 
@@ -283,7 +337,6 @@ const useCourseDetail = (courseId: string | undefined) => {
         .eq('user_id', user.id)
         .eq('course_id', courseId);
       
-      // Generate the certificate using the RPC function
       const { data, error } = await supabase.rpc(
         'generate_certificate',
         { course_id: courseId }

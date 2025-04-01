@@ -247,8 +247,47 @@ async function updateCourseProgress(lessonId: string, userId: string) {
 // API services for certificates
 export const certificateService = {
   generate: async (userId: string, courseId: string) => {
-    const response = await api.post('/certificates/generate', { userId, courseId });
-    return response.data;
+    try {
+      console.log(`Generating certificate for user ${userId}, course ${courseId}`);
+      
+      // First, verify all lessons are completed
+      const { data: lessons, error: lessonsError } = await supabase
+        .from('lessons')
+        .select('id')
+        .eq('course_id', courseId);
+        
+      if (lessonsError) throw lessonsError;
+      
+      const lessonIds = lessons.map(lesson => lesson.id);
+      
+      // Get completed lessons count with explicit table reference
+      const { count: completedCount, error: countError } = await supabase
+        .from('user_lesson_progress')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('completed', true)
+        .in('lesson_id', lessonIds);
+        
+      if (countError) throw countError;
+      
+      // Check if all lessons are completed
+      if (completedCount !== lessons.length) {
+        throw new Error(`Not all lessons completed (${completedCount}/${lessons.length})`);
+      }
+      
+      // Generate certificate
+      const { data, error } = await supabase.rpc(
+        'generate_certificate',
+        { course_id: courseId }
+      );
+      
+      if (error) throw error;
+      
+      return data;
+    } catch (error) {
+      console.error('Error generating certificate:', error);
+      throw error;
+    }
   },
   
   findByUserId: async (userId: string) => {
