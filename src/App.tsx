@@ -16,6 +16,7 @@ import NotFound from "./pages/NotFound";
 import LearningDashboard from "./pages/LearningDashboard";
 import MyCourses from "./pages/MyCourses";
 import MyCertificates from "./pages/MyCertificates";
+import LessonView from "./pages/LessonView";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/courses" element={<Courses />} />
             <Route path="/courses/:id" element={<CourseDetail />} />
+            <Route path="/courses/:courseId/lessons/:lessonId" element={<LessonView />} />
             <Route path="/signin" element={<SignIn />} />
             <Route path="/signup" element={<SignUp />} />
             
@@ -40,7 +42,8 @@ const App = () => (
             <Route path="/certificates" element={<RequireAuth><MyCertificates /></RequireAuth>} />
             
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
+            <Route path="*" element={<NotFoun
+d />} />
           </Routes>
         </AuthProvider>
       </BrowserRouter>

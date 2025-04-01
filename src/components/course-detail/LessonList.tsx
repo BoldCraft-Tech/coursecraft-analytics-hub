@@ -6,6 +6,7 @@ import { CheckCircle, Circle, Clock, Play, Lock } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 
 interface Lesson {
   id: string;
@@ -28,6 +29,7 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
   const [loadingLessonId, setLoadingLessonId] = useState<string | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const sortedLessons = [...lessons].sort((a, b) => a.order_index - b.order_index);
 
@@ -86,6 +88,18 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
     }
   };
 
+  const handleStartLesson = (lessonId: string) => {
+    if (!isEnrolled) {
+      toast({
+        title: 'Enrollment required',
+        description: 'Please enroll in this course to access lessons',
+      });
+      return;
+    }
+
+    navigate(`/courses/${courseId}/lessons/${lessonId}`);
+  };
+
   return (
     <Accordion 
       type="single" 
@@ -131,6 +145,13 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
                   disabled={loadingLessonId === lesson.id}
                 >
                   {lesson.completed ? 'Mark as incomplete' : 'Mark as complete'}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => handleStartLesson(lesson.id)}
+                >
+                  <Play className="h-3 w-3 mr-1" />
+                  {lesson.completed ? 'Review Lesson' : 'Start Lesson'}
                 </Button>
               </div>
             )}

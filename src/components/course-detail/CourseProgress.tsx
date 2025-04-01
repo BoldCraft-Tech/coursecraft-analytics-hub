@@ -1,6 +1,6 @@
 
 import { Progress } from '@/components/ui/progress';
-import { CheckCircle, Circle, BookOpen, Award } from 'lucide-react';
+import { CheckCircle, Circle, BookOpen, Award, Clock } from 'lucide-react';
 
 interface CourseProgressProps {
   progress: number;
@@ -9,6 +9,22 @@ interface CourseProgressProps {
 }
 
 const CourseProgress = ({ progress, totalLessons, completedLessons }: CourseProgressProps) => {
+  // Calculate estimated remaining time (assuming average of 30 min per lesson)
+  const remainingLessons = totalLessons - completedLessons;
+  const estimatedRemainingTime = remainingLessons * 30; // minutes
+  const remainingHours = Math.floor(estimatedRemainingTime / 60);
+  const remainingMinutes = estimatedRemainingTime % 60;
+  
+  // Format remaining time string
+  let remainingTimeString = '';
+  if (remainingHours > 0) {
+    remainingTimeString += `${remainingHours} hour${remainingHours !== 1 ? 's' : ''}`;
+  }
+  if (remainingMinutes > 0 || remainingHours === 0) {
+    if (remainingHours > 0) remainingTimeString += ' ';
+    remainingTimeString += `${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`;
+  }
+  
   return (
     <div className="p-6 bg-muted/30 rounded-lg border border-border/50">
       <div className="flex items-center justify-between mb-3">
@@ -19,13 +35,22 @@ const CourseProgress = ({ progress, totalLessons, completedLessons }: CourseProg
       </div>
       <Progress value={progress} className="h-2.5 mb-5" />
       
-      <div className="flex flex-col gap-2">
+      <div className="grid gap-4">
         <div className="flex items-center text-sm text-muted-foreground">
           <BookOpen className="h-4 w-4 mr-2" />
           <span>
             {completedLessons} of {totalLessons} lessons completed
           </span>
         </div>
+        
+        {remainingLessons > 0 && (
+          <div className="flex items-center text-sm text-muted-foreground">
+            <Clock className="h-4 w-4 mr-2" />
+            <span>
+              Estimated {remainingTimeString} remaining
+            </span>
+          </div>
+        )}
         
         {progress === 100 ? (
           <div className="flex items-center text-sm text-green-600">
