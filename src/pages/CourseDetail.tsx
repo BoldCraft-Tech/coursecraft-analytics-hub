@@ -335,7 +335,7 @@ const CourseDetail = () => {
                   {enrollment && enrollment.progress === 100 && !certificateId && (
                     <Button 
                       variant="outline"
-                      onClick={generateCertificate}
+                      onClick={() => generateCertificate()}
                       disabled={loadingCertificate}
                       className="w-full sm:w-auto"
                     >
@@ -388,7 +388,6 @@ const CourseDetail = () => {
                         </div>
                       </div>
                       
-                      {console.log('Rendering lessons section, count:', lessons.length)}
                       {lessons && lessons.length > 0 ? (
                         <LessonList 
                           courseId={course.id}
