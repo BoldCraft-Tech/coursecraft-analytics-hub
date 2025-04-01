@@ -1,3 +1,4 @@
+
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -87,9 +88,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data?.user) {
         toast({
           title: "Account created",
-          description: "Your account has been successfully created.",
+          description: "Your account has been successfully created. You can now sign in.",
         });
         
+        // Auto sign-in after sign up
         await signIn(email, password);
       }
     } catch (error: any) {

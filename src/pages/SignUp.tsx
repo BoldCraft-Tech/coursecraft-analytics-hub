@@ -20,6 +20,10 @@ const SignUp = () => {
             </div>
             
             <AuthForm type="signup" />
+            
+            <div className="max-w-md mx-auto mt-6 text-center text-sm text-muted-foreground">
+              <p>By signing up, you'll automatically be logged in and can start exploring courses right away.</p>
+            </div>
           </div>
         </BlurredBackground>
       </main>

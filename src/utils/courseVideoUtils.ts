@@ -41,8 +41,7 @@ export const fetchLessonsWithVideos = async (courseId: string): Promise<Lesson[]
     console.log(`Found ${lessons.length} lessons`);
     
     // Since there's no videos table in the schema, we're adapting this to work with
-    // the current structure. In a real application, you might want to create a videos table.
-    // For now, let's return lessons as is, assuming video_url would be added later.
+    // the current structure. Each lesson may have an optional video_url field
     const lessonsWithVideos = lessons.map(lesson => ({
       ...lesson,
       video_url: lesson.video_url || null

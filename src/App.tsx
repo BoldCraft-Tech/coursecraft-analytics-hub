@@ -14,7 +14,7 @@ import MyCertificates from '@/pages/MyCertificates';
 import NotFound from '@/pages/NotFound';
 import AdminDashboard from '@/pages/AdminDashboard';
 import AdminLessons from '@/pages/AdminLessons';
-import { AuthProvider } from '@/hooks/useAuth';
+import { AuthProvider, RequireAuth } from '@/hooks/useAuth';
 import './App.css';
 
 function App() {
@@ -26,12 +26,14 @@ function App() {
           <Route path="/courses" element={<Courses />} />
           <Route path="/courses/:id" element={<CourseDetail />} />
           <Route path="/courses/:courseId/lessons/:lessonId" element={<LessonView />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/dashboard/learning" element={<LearningDashboard />} />
-          <Route path="/dashboard/courses" element={<MyCourses />} />
-          <Route path="/dashboard/certificates" element={<MyCertificates />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/courses/:courseId/lessons" element={<AdminLessons />} />
+          <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
+          <Route path="/dashboard/learning" element={<RequireAuth><LearningDashboard /></RequireAuth>} />
+          <Route path="/my-courses" element={<RequireAuth><MyCourses /></RequireAuth>} />
+          <Route path="/dashboard/courses" element={<RequireAuth><MyCourses /></RequireAuth>} />
+          <Route path="/dashboard/certificates" element={<RequireAuth><MyCertificates /></RequireAuth>} />
+          <Route path="/certificates" element={<RequireAuth><MyCertificates /></RequireAuth>} />
+          <Route path="/admin" element={<RequireAuth><AdminDashboard /></RequireAuth>} />
+          <Route path="/admin/courses/:courseId/lessons" element={<RequireAuth><AdminLessons /></RequireAuth>} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<SignUp />} />
           <Route path="*" element={<NotFound />} />
