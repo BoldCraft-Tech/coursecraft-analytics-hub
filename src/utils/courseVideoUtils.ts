@@ -15,19 +15,33 @@ export interface LessonWithVideo {
 // Function to fetch lessons with videos for a course
 export const fetchLessonsWithVideos = async (courseId: string): Promise<LessonWithVideo[]> => {
   try {
+    console.log('Fetching lessons for course:', courseId);
+    
     const { data, error } = await supabase
       .from('lessons')
       .select('*')
       .eq('course_id', courseId)
       .order('order_index');
     
-    if (error) throw error;
+    if (error) {
+      console.error('Error in supabase query:', error);
+      throw error;
+    }
     
-    // Transform the data to include video URLs
+    console.log('Lessons data from database:', data);
+    
+    if (!data || data.length === 0) {
+      console.log('No lessons found for this course');
+      return [];
+    }
+    
+    // Transform the data to include video URLs (if they exist)
     const lessonsWithVideos = data.map(lesson => ({
       ...lesson,
-      videoUrl: undefined // Set undefined as default since video_url doesn't exist yet
+      videoUrl: lesson.video_url || undefined
     }));
+    
+    console.log('Transformed lessons:', lessonsWithVideos);
     
     return lessonsWithVideos;
   } catch (error) {
@@ -89,19 +103,35 @@ export const updateCourseProgress = async (userId: string, courseId: string): Pr
     
     if (lessonsError) throw lessonsError;
     
+    if (!lessons || lessons.length === 0) {
+      console.log('No lessons found for course progress calculation');
+      return;
+    }
+    
+    // Create an array of lesson IDs
+    const lessonIds = lessons.map(l => l.id);
+    
     // Get progress for all lessons in this course
     const { data: progress, error: progressError } = await supabase
       .from('user_lesson_progress')
       .select('*')
       .eq('user_id', userId)
-      .eq('lesson_id', 'in', `(${lessons.map(l => l.id).join(',')})`);
+      .in('lesson_id', lessonIds);
     
     if (progressError) throw progressError;
     
     // Calculate overall progress
     const totalLessons = lessons.length;
-    const completedLessons = progress.filter(p => p.completed).length;
+    const completedLessons = progress ? progress.filter(p => p.completed).length : 0;
     const progressPercentage = totalLessons > 0 ? Math.floor((completedLessons / totalLessons) * 100) : 0;
+    
+    console.log('Course progress calculation:', {
+      totalLessons,
+      completedLessons,
+      progressPercentage,
+      courseId,
+      userId
+    });
     
     // Update enrollment record
     const { error: updateError } = await supabase

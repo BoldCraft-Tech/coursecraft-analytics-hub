@@ -17,6 +17,7 @@ interface Lesson {
   order_index: number;
   completed?: boolean;
   video_url?: string;
+  videoUrl?: string; // Support both formats for compatibility
 }
 
 interface LessonListProps {
@@ -32,6 +33,8 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  console.log('LessonList - Received lessons:', lessons);
 
   const sortedLessons = [...lessons].sort((a, b) => a.order_index - b.order_index);
 
@@ -103,11 +106,24 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
   };
 
   const getLessonTypeIcon = (lesson: Lesson) => {
-    if (lesson.video_url) {
+    // Check for both possible properties for video URL
+    if (lesson.video_url || lesson.videoUrl) {
       return <Video className="h-3 w-3 ml-2 text-accent" />;
     }
     return <FileText className="h-3 w-3 ml-2 text-blue-500" />;
   };
+
+  console.log('LessonList - Sorted lessons:', sortedLessons);
+  console.log('LessonList - Number of lessons:', sortedLessons.length);
+
+  // First check if there are actually lessons to display
+  if (!sortedLessons || sortedLessons.length === 0) {
+    return (
+      <div className="text-center py-8 bg-muted/30 rounded-lg">
+        <p className="text-muted-foreground">No lessons available for this course yet</p>
+      </div>
+    );
+  }
 
   return (
     <Accordion 
@@ -134,7 +150,7 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
                   <Lock className="h-4 w-4 mr-3 text-muted-foreground" />
                 )}
                 <span className="text-sm font-medium">{lesson.order_index}. {lesson.title}</span>
-                {lesson.video_url && (
+                {(lesson.video_url || lesson.videoUrl) && (
                   <Badge variant="outline" className="ml-2 bg-accent/10 text-accent-foreground border-accent/20 text-xs">
                     <Video className="h-3 w-3 mr-1" />
                     Video

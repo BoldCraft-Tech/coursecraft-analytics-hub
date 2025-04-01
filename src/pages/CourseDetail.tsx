@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
@@ -60,6 +59,8 @@ const CourseDetail = () => {
     const fetchCourseDetails = async () => {
       setLoading(true);
       try {
+        console.log('Fetching course details for ID:', id);
+        
         // Fetch course data
         const { data: courseData, error: courseError } = await supabase
           .from('courses')
@@ -69,6 +70,7 @@ const CourseDetail = () => {
           
         if (courseError) throw courseError;
         
+        console.log('Course data retrieved:', courseData);
         setCourse(courseData);
         
         // Fetch lessons
@@ -79,6 +81,9 @@ const CourseDetail = () => {
           .order('order_index', { ascending: true });
           
         if (lessonsError) throw lessonsError;
+        
+        console.log('Lessons data retrieved:', lessonsData);
+        console.log('Number of lessons found:', lessonsData?.length || 0);
         
         // If user is logged in, fetch enrollment and lesson progress
         if (user) {
@@ -391,7 +396,8 @@ const CourseDetail = () => {
                         </div>
                       </div>
                       
-                      {lessons.length > 0 ? (
+                      {console.log('Rendering lessons section, count:', lessons.length)}
+                      {lessons && lessons.length > 0 ? (
                         <LessonList 
                           courseId={course.id}
                           lessons={lessons} 
