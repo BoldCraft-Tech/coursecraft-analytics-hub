@@ -243,10 +243,6 @@ const CourseDetail = () => {
     return Math.round((completedLessons / lessons.length) * 100);
   };
 
-  const handleEnrollButtonClick = () => {
-    return null;
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col">
