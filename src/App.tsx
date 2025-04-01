@@ -14,27 +14,30 @@ import MyCertificates from '@/pages/MyCertificates';
 import NotFound from '@/pages/NotFound';
 import AdminDashboard from '@/pages/AdminDashboard';
 import AdminLessons from '@/pages/AdminLessons';
+import { AuthProvider } from '@/hooks/useAuth';
 import './App.css';
 
 function App() {
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<Index />} />
-        <Route path="/courses" element={<Courses />} />
-        <Route path="/courses/:id" element={<CourseDetail />} />
-        <Route path="/courses/:courseId/lessons/:lessonId" element={<LessonView />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/dashboard/learning" element={<LearningDashboard />} />
-        <Route path="/dashboard/courses" element={<MyCourses />} />
-        <Route path="/dashboard/certificates" element={<MyCertificates />} />
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/admin/courses/:courseId/lessons" element={<AdminLessons />} />
-        <Route path="/signin" element={<SignIn />} />
-        <Route path="/signup" element={<SignUp />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-      <Toaster />
+      <AuthProvider>
+        <Routes>
+          <Route path="/" element={<Index />} />
+          <Route path="/courses" element={<Courses />} />
+          <Route path="/courses/:id" element={<CourseDetail />} />
+          <Route path="/courses/:courseId/lessons/:lessonId" element={<LessonView />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/dashboard/learning" element={<LearningDashboard />} />
+          <Route path="/dashboard/courses" element={<MyCourses />} />
+          <Route path="/dashboard/certificates" element={<MyCertificates />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/courses/:courseId/lessons" element={<AdminLessons />} />
+          <Route path="/signin" element={<SignIn />} />
+          <Route path="/signup" element={<SignUp />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+        <Toaster />
+      </AuthProvider>
     </Router>
   );
 }
