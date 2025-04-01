@@ -12,7 +12,7 @@ export interface LessonWithVideo {
   videoUrl?: string; // Make this optional
 }
 
-// Function to fetch lessons with video URLs for a course
+// Function to fetch lessons with videos for a course
 export const fetchLessonsWithVideos = async (courseId: string): Promise<LessonWithVideo[]> => {
   try {
     const { data, error } = await supabase
@@ -26,7 +26,7 @@ export const fetchLessonsWithVideos = async (courseId: string): Promise<LessonWi
     // Transform the data to include video URLs
     const lessonsWithVideos = data.map(lesson => ({
       ...lesson,
-      videoUrl: lesson.video_url || undefined
+      videoUrl: undefined // Set undefined as default since video_url doesn't exist yet
     }));
     
     return lessonsWithVideos;
@@ -46,7 +46,7 @@ export const updateLessonProgress = async (
   try {
     // First, check if a progress record already exists
     const { data: existingProgress } = await supabase
-      .from('lesson_progress')
+      .from('user_lesson_progress')
       .select('*')
       .eq('user_id', userId)
       .eq('lesson_id', lessonId)
@@ -55,19 +55,18 @@ export const updateLessonProgress = async (
     if (existingProgress) {
       // Update existing progress record
       await supabase
-        .from('lesson_progress')
-        .update({ progress_percentage: progressPercentage, last_watched_at: new Date().toISOString() })
+        .from('user_lesson_progress')
+        .update({ completed: progressPercentage >= 90, last_accessed: new Date().toISOString() })
         .eq('id', existingProgress.id);
     } else {
       // Create new progress record
       await supabase
-        .from('lesson_progress')
+        .from('user_lesson_progress')
         .insert({
           user_id: userId,
-          course_id: courseId,
           lesson_id: lessonId,
-          progress_percentage: progressPercentage,
-          last_watched_at: new Date().toISOString()
+          completed: progressPercentage >= 90,
+          last_accessed: new Date().toISOString()
         });
     }
 
@@ -92,16 +91,16 @@ export const updateCourseProgress = async (userId: string, courseId: string): Pr
     
     // Get progress for all lessons in this course
     const { data: progress, error: progressError } = await supabase
-      .from('lesson_progress')
+      .from('user_lesson_progress')
       .select('*')
       .eq('user_id', userId)
-      .eq('course_id', courseId);
+      .eq('lesson_id', 'in', `(${lessons.map(l => l.id).join(',')})`);
     
     if (progressError) throw progressError;
     
     // Calculate overall progress
     const totalLessons = lessons.length;
-    const completedLessons = progress.filter(p => p.progress_percentage >= 90).length;
+    const completedLessons = progress.filter(p => p.completed).length;
     const progressPercentage = totalLessons > 0 ? Math.floor((completedLessons / totalLessons) * 100) : 0;
     
     // Update enrollment record
