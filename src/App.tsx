@@ -8,6 +8,7 @@ import LessonView from '@/pages/LessonView';
 import SignIn from '@/pages/SignIn';
 import SignUp from '@/pages/SignUp';
 import Dashboard from '@/pages/Dashboard';
+import Learning from '@/pages/Learning';
 import LearningDashboard from '@/pages/LearningDashboard';
 import MyCourses from '@/pages/MyCourses';
 import MyCertificates from '@/pages/MyCertificates';
@@ -36,6 +37,7 @@ function App() {
           <Route path="/admin/courses/:courseId/lessons" element={<RequireAuth><AdminLessons /></RequireAuth>} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="/signup" element={<SignUp />} />
+          <Route path="/learning" element={<Learning />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         <Toaster />
