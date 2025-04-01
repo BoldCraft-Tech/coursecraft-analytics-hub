@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 
 // Updated interface to include video_url
@@ -90,44 +89,19 @@ export const updateLessonProgress = async (
     
     const completed = progressPercentage >= 90; // Mark as completed if progress is at least 90%
     
-    // First check if a record already exists
-    const { data: existingProgress } = await supabase
+    // Upsert the lesson progress record
+    const { error: progressError } = await supabase
       .from('user_lesson_progress')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('lesson_id', lessonId)
-      .maybeSingle();
+      .upsert({
+        user_id: userId,
+        lesson_id: lessonId,
+        completed,
+        last_accessed: new Date().toISOString()
+      }, { onConflict: 'user_id,lesson_id' });
       
-    if (existingProgress) {
-      // Update the existing record
-      const { error } = await supabase
-        .from('user_lesson_progress')
-        .update({
-          completed,
-          last_accessed: new Date().toISOString()
-        })
-        .eq('user_id', userId)
-        .eq('lesson_id', lessonId);
-        
-      if (error) {
-        console.error('Error updating lesson progress:', error);
-        throw error;
-      }
-    } else {
-      // Insert a new record
-      const { error } = await supabase
-        .from('user_lesson_progress')
-        .insert({
-          user_id: userId,
-          lesson_id: lessonId,
-          completed,
-          last_accessed: new Date().toISOString()
-        });
-        
-      if (error) {
-        console.error('Error inserting lesson progress:', error);
-        throw error;
-      }
+    if (progressError) {
+      console.error('Error updating lesson progress:', progressError);
+      throw progressError;
     }
     
     console.log(`Progress updated successfully. Completed: ${completed}`);
@@ -183,13 +157,15 @@ const updateCourseProgress = async (userId: string, courseId: string): Promise<v
     
     if (totalLessons === 0) return; // No lessons to track
     
+    const lessonIds = totalLessonsData.map(lesson => lesson.id);
+    
     // Get completed lessons for this user and course
     const { data: completedLessonsData, error: completedError } = await supabase
       .from('user_lesson_progress')
       .select('lesson_id')
       .eq('user_id', userId)
       .eq('completed', true)
-      .in('lesson_id', totalLessonsData.map(lesson => lesson.id));
+      .in('lesson_id', lessonIds);
       
     if (completedError) throw completedError;
     
@@ -217,3 +193,6 @@ const updateCourseProgress = async (userId: string, courseId: string): Promise<v
     throw error;
   }
 };
+
+// Export other utility functions for external use
+export { getYouTubeVideoId, getEmbeddableYouTubeUrl, searchYouTubeVideos };

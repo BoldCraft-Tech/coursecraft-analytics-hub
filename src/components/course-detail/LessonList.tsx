@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -51,14 +50,16 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
 
     try {
       // Update lesson progress using Supabase directly
-      await supabase
+      const { error } = await supabase
         .from('user_lesson_progress')
         .upsert({
           user_id: user.id,
           lesson_id: lessonId,
           completed: !currentStatus,
           last_accessed: new Date().toISOString()
-        });
+        }, { onConflict: 'user_id,lesson_id' });
+
+      if (error) throw error;
 
       // Update UI through callback
       onLessonComplete(lessonId, !currentStatus);

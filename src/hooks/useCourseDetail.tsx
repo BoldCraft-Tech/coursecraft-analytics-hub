@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -151,15 +152,17 @@ const useCourseDetail = (courseId: string | undefined) => {
   };
 
   const handleLessonComplete = async (lessonId: string, completed: boolean) => {
+    // Update local state first
     setLessons(prev => prev.map(lesson => 
       lesson.id === lessonId 
         ? { ...lesson, completed } 
         : lesson
     ));
     
+    // Update completed lessons count
     const newCompletedCount = completed 
       ? completedLessons + 1 
-      : completedLessons - 1;
+      : Math.max(0, completedLessons - 1);
     
     setCompletedLessons(newCompletedCount);
     
@@ -167,23 +170,33 @@ const useCourseDetail = (courseId: string | undefined) => {
       const progressPercentage = Math.round((newCompletedCount / lessons.length) * 100);
       
       if (enrollment) {
+        // Update local enrollment state
         setEnrollment(prev => prev ? {
           ...prev,
           progress: progressPercentage,
           completed: progressPercentage === 100
         } : null);
         
-        await supabase
-          .from('enrollments')
-          .update({ 
-            progress: progressPercentage,
-            completed: progressPercentage === 100
-          })
-          .eq('user_id', user?.id)
-          .eq('course_id', courseId);
-          
-        if (progressPercentage === 100 && !certificateId) {
-          await generateCertificate();
+        if (!user || !courseId) return;
+        
+        try {
+          // Update enrollment in database
+          await supabase
+            .from('enrollments')
+            .update({ 
+              progress: progressPercentage,
+              completed: progressPercentage === 100,
+              last_accessed: new Date().toISOString()
+            })
+            .eq('user_id', user.id)
+            .eq('course_id', courseId);
+            
+          // If all lessons are completed and no certificate exists, generate one
+          if (progressPercentage === 100 && !certificateId) {
+            await generateCertificate();
+          }
+        } catch (error) {
+          console.error("Failed to update enrollment:", error);
         }
       }
     }
@@ -195,8 +208,7 @@ const useCourseDetail = (courseId: string | undefined) => {
     setLoadingCertificate(true);
     
     try {
-      // First, double-check all lessons are completed
-      // We'll query the database directly to ensure we have the latest data
+      // First, double-check all lessons are completed by querying the database directly
       const { data: lessonData, error: lessonError } = await supabase
         .from('lessons')
         .select('id')
@@ -206,34 +218,72 @@ const useCourseDetail = (courseId: string | undefined) => {
       
       const lessonIds = lessonData.map(lesson => lesson.id);
       
-      // Get user's completed lessons for this course
-      const { data: progressData, error: progressError } = await supabase
-        .from('user_lesson_progress')
-        .select('lesson_id')
-        .eq('user_id', user.id)
-        .eq('completed', true)
-        .in('lesson_id', lessonIds);
-        
-      if (progressError) throw progressError;
-      
-      const completedLessonIds = progressData.map(progress => progress.lesson_id);
-      
-      // Verify all lessons are completed
-      const allCompleted = lessonIds.every(id => completedLessonIds.includes(id));
-      
-      if (!allCompleted) {
-        // Some lessons are not completed
-        const missingCount = lessonIds.length - completedLessonIds.length;
+      if (lessonIds.length === 0) {
         toast({
           title: 'Cannot generate certificate',
-          description: `Please complete all lessons first. You still have ${missingCount} lessons to complete.`,
+          description: 'This course has no lessons yet.',
           variant: 'destructive',
         });
         setLoadingCertificate(false);
         return;
       }
       
-      // All lessons are completed, generate certificate
+      // Get user's completed lessons for this course
+      const { data: progressData, error: progressError } = await supabase
+        .from('user_lesson_progress')
+        .select('lesson_id, completed')
+        .eq('user_id', user.id)
+        .eq('completed', true)
+        .in('lesson_id', lessonIds);
+        
+      if (progressError) throw progressError;
+      
+      // Extract the completed lesson IDs
+      const completedLessonIds = progressData.map(progress => progress.lesson_id);
+      
+      console.log('Certificate generation check:', {
+        lessonIds,
+        completedLessonIds,
+        allLessonsExist: lessonIds.length > 0,
+        allCompleted: lessonIds.every(id => completedLessonIds.includes(id))
+      });
+      
+      // Check if any lessons aren't completed
+      const incompleteCount = lessonIds.length - completedLessonIds.length;
+      if (incompleteCount > 0) {
+        toast({
+          title: 'Cannot generate certificate',
+          description: `Please complete all lessons first. You still have ${incompleteCount} lessons to complete.`,
+          variant: 'destructive',
+        });
+        setLoadingCertificate(false);
+        return;
+      }
+      
+      // Mark all lessons as completed in the database as a safety measure
+      for (const lessonId of lessonIds) {
+        await supabase
+          .from('user_lesson_progress')
+          .upsert({
+            user_id: user.id,
+            lesson_id: lessonId,
+            completed: true,
+            last_accessed: new Date().toISOString()
+          }, { onConflict: 'user_id,lesson_id' });
+      }
+      
+      // Update enrollment progress to 100%
+      await supabase
+        .from('enrollments')
+        .update({ 
+          progress: 100,
+          completed: true,
+          last_accessed: new Date().toISOString()
+        })
+        .eq('user_id', user.id)
+        .eq('course_id', courseId);
+      
+      // Generate the certificate using the RPC function
       const { data, error } = await supabase.rpc(
         'generate_certificate',
         { course_id: courseId }

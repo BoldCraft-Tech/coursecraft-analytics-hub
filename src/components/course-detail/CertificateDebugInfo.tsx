@@ -1,8 +1,9 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2 } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { useToast } from '@/components/ui/use-toast';
 
 interface CertificateDebugInfoProps {
@@ -11,105 +12,161 @@ interface CertificateDebugInfoProps {
 }
 
 const CertificateDebugInfo = ({ userId, courseId }: CertificateDebugInfoProps) => {
-  const [loading, setLoading] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<{
-    totalLessons: number;
-    completedLessons: number;
-    lessonIds: string[];
-    completedLessonIds: string[];
-    missingLessonIds: string[];
-  } | null>(null);
+  const [totalLessons, setTotalLessons] = useState<any[]>([]);
+  const [completedLessons, setCompletedLessons] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [completionStatus, setCompletionStatus] = useState<string>('checking...');
   const { toast } = useToast();
 
-  const checkCompletionStatus = async () => {
-    if (!userId || !courseId) return;
+  useEffect(() => {
+    const fetchLessonStatus = async () => {
+      setIsLoading(true);
+      try {
+        // Get all lessons for this course
+        const { data: lessons, error: lessonsError } = await supabase
+          .from('lessons')
+          .select('id, title')
+          .eq('course_id', courseId);
+          
+        if (lessonsError) throw lessonsError;
+        setTotalLessons(lessons || []);
+        
+        // Get completed lessons
+        const { data: progress, error: progressError } = await supabase
+          .from('user_lesson_progress')
+          .select('lesson_id, completed')
+          .eq('user_id', userId)
+          .eq('completed', true)
+          .in('lesson_id', lessons.map(l => l.id));
+          
+        if (progressError) throw progressError;
+        setCompletedLessons(progress || []);
+        
+        // Determine completion status
+        if (lessons.length === 0) {
+          setCompletionStatus('No lessons in course');
+        } else if (progress.length === 0) {
+          setCompletionStatus('No completed lessons');
+        } else if (progress.length < lessons.length) {
+          setCompletionStatus(`${progress.length}/${lessons.length} lessons completed`);
+        } else {
+          setCompletionStatus('All lessons completed');
+        }
+      } catch (error) {
+        console.error('Error fetching lesson status:', error);
+        setCompletionStatus('Error checking status');
+      } finally {
+        setIsLoading(false);
+      }
+    };
     
-    setLoading(true);
-    
+    fetchLessonStatus();
+  }, [userId, courseId]);
+  
+  const forceMarkAllComplete = async () => {
     try {
-      // Get lesson IDs for this course
-      const { data: lessonData, error: lessonError } = await supabase
-        .from('lessons')
-        .select('id, title')
-        .eq('course_id', courseId);
-        
-      if (lessonError) throw lessonError;
+      // Mark all lessons as completed in the database
+      for (const lesson of totalLessons) {
+        await supabase
+          .from('user_lesson_progress')
+          .upsert({
+            user_id: userId,
+            lesson_id: lesson.id,
+            completed: true,
+            last_accessed: new Date().toISOString()
+          }, { onConflict: 'user_id,lesson_id' });
+      }
       
-      const lessonIds = lessonData.map(lesson => lesson.id);
-      
-      // Get completed lessons for this user
-      const { data: progressData, error: progressError } = await supabase
-        .from('user_lesson_progress')
-        .select('lesson_id')
+      // Update enrollment progress to 100%
+      await supabase
+        .from('enrollments')
+        .update({ 
+          progress: 100,
+          completed: true,
+          last_accessed: new Date().toISOString()
+        })
         .eq('user_id', userId)
-        .eq('completed', true)
-        .in('lesson_id', lessonIds);
-        
-      if (progressError) throw progressError;
+        .eq('course_id', courseId);
       
-      const completedLessonIds = progressData.map(progress => progress.lesson_id);
-      
-      // Find missing lessons
-      const missingLessonIds = lessonIds.filter(id => !completedLessonIds.includes(id));
-      
-      setDebugInfo({
-        totalLessons: lessonIds.length,
-        completedLessons: completedLessonIds.length,
-        lessonIds,
-        completedLessonIds,
-        missingLessonIds
-      });
-      
-      // Show toast with basic info
       toast({
-        title: 'Completion Status',
-        description: `Completed ${completedLessonIds.length} out of ${lessonIds.length} lessons.`,
+        title: 'All lessons marked as complete',
+        description: 'You can now generate a certificate'
       });
-    } catch (error: any) {
-      console.error('Error checking completion status:', error);
+      
+      // Refresh the lesson status
+      setCompletedLessons(totalLessons.map(lesson => ({ 
+        lesson_id: lesson.id,
+        completed: true
+      })));
+      setCompletionStatus('All lessons completed');
+    } catch (error) {
+      console.error('Error marking lessons as complete:', error);
       toast({
         title: 'Error',
-        description: error.message || 'Could not check completion status',
-        variant: 'destructive',
+        description: 'Failed to mark lessons as complete',
+        variant: 'destructive'
       });
-    } finally {
-      setLoading(false);
     }
   };
 
-  // This component is only included during development or for administrators
+  if (isLoading) {
+    return <div className="mt-6 text-center text-sm text-muted-foreground">Loading certificate data...</div>;
+  }
+
   return (
-    <div className="mt-4 p-4 bg-muted/20 rounded-lg text-sm">
-      <h4 className="font-medium mb-2">Certificate Debug Info</h4>
-      
-      <Button 
-        variant="outline" 
-        size="sm"
-        onClick={checkCompletionStatus}
-        disabled={loading}
-        className="mb-2"
-      >
-        {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-        Check Completion Status
-      </Button>
-      
-      {debugInfo && (
-        <div className="space-y-1 mt-2">
-          <p>Total lessons: {debugInfo.totalLessons}</p>
-          <p>Completed lessons: {debugInfo.completedLessons}</p>
-          {debugInfo.missingLessonIds.length > 0 && (
+    <Accordion type="single" collapsible className="w-full mt-6 border rounded-md">
+      <AccordionItem value="debug-info">
+        <AccordionTrigger className="px-4 py-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">Certificate Eligibility Debug</span>
+            <Badge variant={
+              completionStatus === 'All lessons completed' 
+                ? 'success' 
+                : completionStatus === 'No lessons in course'
+                ? 'outline'
+                : 'secondary'
+            }>
+              {completionStatus}
+            </Badge>
+          </div>
+        </AccordionTrigger>
+        <AccordionContent className="px-4 pt-2 pb-4">
+          <div className="space-y-4">
             <div>
-              <p className="text-red-500">Missing {debugInfo.missingLessonIds.length} lessons:</p>
-              <ul className="list-disc pl-5">
-                {debugInfo.missingLessonIds.map(id => (
-                  <li key={id}>{id}</li>
+              <h4 className="text-sm font-medium mb-2">Course Lessons ({totalLessons.length})</h4>
+              <ul className="text-sm space-y-1">
+                {totalLessons.map(lesson => (
+                  <li key={lesson.id} className="flex justify-between">
+                    <span>{lesson.title}</span>
+                    <Badge variant={
+                      completedLessons.some(p => p.lesson_id === lesson.id) 
+                        ? 'success' 
+                        : 'outline'
+                    }>
+                      {completedLessons.some(p => p.lesson_id === lesson.id) ? 'Completed' : 'Incomplete'}
+                    </Badge>
+                  </li>
                 ))}
+                {totalLessons.length === 0 && (
+                  <li className="text-muted-foreground">No lessons found</li>
+                )}
               </ul>
             </div>
-          )}
-        </div>
-      )}
-    </div>
+            
+            <div className="flex justify-end">
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={forceMarkAllComplete}
+                disabled={totalLessons.length === 0 || completionStatus === 'All lessons completed'}
+              >
+                Force Mark All Complete
+              </Button>
+            </div>
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
   );
 };
 
