@@ -7,7 +7,8 @@ interface VideoPlayerWrapperProps {
 }
 
 const VideoPlayerWrapper: React.FC<VideoPlayerWrapperProps> = ({ videoUrl }) => {
-  return <VideoPlayer url={videoUrl} />;
+  // Pass videoUrl as a prop named 'src' to match VideoPlayer's expected props
+  return <VideoPlayer src={videoUrl} />;
 };
 
 export default VideoPlayerWrapper;

@@ -93,7 +93,6 @@ const AdminLessons = () => {
     try {
       setIsSubmitting(true);
       
-      // Convert duration to number before sending to the database
       const durationNumber = parseInt(newLesson.duration) || 0;
       
       const { data, error } = await supabase
@@ -104,7 +103,7 @@ const AdminLessons = () => {
           course_id: courseId,
           video_url: newLesson.video_url || null,
           order_index: lessons.length,
-          duration: durationNumber, // Convert to number
+          duration: durationNumber,
         })
         .select()
         .single();
@@ -116,7 +115,6 @@ const AdminLessons = () => {
         description: 'Your lesson has been created successfully',
       });
       
-      // Reset form
       setNewLesson({
         title: '',
         content: '',
@@ -124,7 +122,6 @@ const AdminLessons = () => {
         video_url: '',
       });
       
-      // Close dialog and refresh lessons
       setAddLessonOpen(false);
       fetchLessons();
       
@@ -165,7 +162,6 @@ const AdminLessons = () => {
         description: 'Lesson updated successfully',
       });
       
-      // Close dialog and refresh lessons
       setEditLessonOpen(false);
       fetchLessons();
       
@@ -201,7 +197,6 @@ const AdminLessons = () => {
         description: 'Lesson deleted successfully',
       });
       
-      // Refresh lessons
       fetchLessons();
       
     } catch (error) {
@@ -227,7 +222,6 @@ const AdminLessons = () => {
       const [movedLesson] = updatedLessons.splice(currentIndex, 1);
       updatedLessons.splice(newIndex, 0, movedLesson);
       
-      // Re-order the lessons
       const updatedWithIndices = updatedLessons.map((lesson, idx) => ({
         ...lesson,
         order_index: idx
@@ -235,7 +229,6 @@ const AdminLessons = () => {
       
       setLessons(updatedWithIndices);
       
-      // Update order_index in database for both affected lessons
       await Promise.all(
         updatedWithIndices
           .filter((_, idx) => idx === newIndex || idx === currentIndex)
@@ -280,19 +273,15 @@ const AdminLessons = () => {
       }
   
       const updatedLessons = [...lessons];
-      // Remove the dragged lesson from its original position
       const [draggedLesson] = updatedLessons.splice(draggedIndex, 1);
-      // Insert the dragged lesson into the target position
       updatedLessons.splice(targetIndex, 0, draggedLesson);
   
-      // Optimistically update the state
       const updatedWithIndices = updatedLessons.map((lesson, idx) => ({
         ...lesson,
         order_index: idx
       }));
       setLessons(updatedWithIndices);
   
-      // Prepare updates for the database
       const updates = updatedWithIndices.map(lesson =>
         supabase
           .from('lessons')
@@ -300,7 +289,6 @@ const AdminLessons = () => {
           .eq('id', lesson.id)
       );
   
-      // Execute all updates in parallel
       await Promise.all(updates);
   
       toast({
@@ -314,7 +302,6 @@ const AdminLessons = () => {
         description: 'Failed to update lesson order. Please try again.',
         variant: 'destructive',
       });
-      // If there's an error, revert the state to the original
       fetchLessons();
     }
   };
