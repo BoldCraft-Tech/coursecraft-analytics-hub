@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
@@ -25,7 +24,8 @@ import {
   MoveUp, 
   MoveDown, 
   Book, 
-  Video 
+  Video, 
+  Youtube 
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useForm } from 'react-hook-form';
@@ -33,8 +33,8 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { searchYouTubeVideos } from '@/utils/courseVideoUtils';
 
-// Form validation schema
 const lessonSchema = z.object({
   title: z.string().min(3, { message: "Title must be at least 3 characters long" }),
   content: z.string().min(10, { message: "Content must be at least 10 characters long" }),
@@ -42,10 +42,8 @@ const lessonSchema = z.object({
   video_url: z.string().url({ message: "Please enter a valid URL" }).optional().or(z.literal(''))
 });
 
-// Form schema type
 type LessonFormValues = z.infer<typeof lessonSchema>;
 
-// Initial form values
 const defaultValues: LessonFormValues = {
   title: "",
   content: "",
@@ -53,7 +51,6 @@ const defaultValues: LessonFormValues = {
   video_url: ""
 };
 
-// Define interfaces for proper typing
 interface Lesson {
   id: string;
   title: string;
@@ -81,18 +78,20 @@ const AdminLessons = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
+  const [youtubeSearchTerm, setYoutubeSearchTerm] = useState('');
+  const [youtubeResults, setYoutubeResults] = useState<any[]>([]);
+  const [youtubeSearching, setYoutubeSearching] = useState(false);
+  const [showYoutubeSearch, setShowYoutubeSearch] = useState(false);
 
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Form setup
   const form = useForm<LessonFormValues>({
     resolver: zodResolver(lessonSchema),
     defaultValues,
   });
 
-  // Reset form with lesson data or empty values
   const resetForm = (lessonData?: any) => {
     if (lessonData) {
       form.reset({
@@ -109,15 +108,12 @@ const AdminLessons = () => {
   useEffect(() => {
     if (!courseId) return;
     
-    // Fetch course and lessons when component mounts
     fetchCourseAndLessons();
   }, [courseId]);
 
-  // Fetch course and lessons
   const fetchCourseAndLessons = async () => {
     setLoading(true);
     try {
-      // Fetch course details
       const { data: courseData, error: courseError } = await supabase
         .from('courses')
         .select('*')
@@ -127,7 +123,6 @@ const AdminLessons = () => {
       if (courseError) throw courseError;
       setCourse(courseData);
 
-      // Fetch lessons for this course
       const { data: lessonsData, error: lessonsError } = await supabase
         .from('lessons')
         .select('*')
@@ -147,13 +142,11 @@ const AdminLessons = () => {
     }
   };
 
-  // Handle lesson submit (create or update)
   const onSubmit = async (values: LessonFormValues) => {
     if (!courseId) return;
     
     try {
       if (isEditing && selectedLesson) {
-        // Update existing lesson
         const { error } = await supabase
           .from('lessons')
           .update({
@@ -172,12 +165,10 @@ const AdminLessons = () => {
           description: 'The lesson has been updated successfully',
         });
       } else {
-        // Calculate the next order_index
         const nextOrderIndex = lessons.length > 0 
           ? Math.max(...lessons.map(l => l.order_index)) + 1 
           : 1;
 
-        // Create new lesson
         const { data, error } = await supabase
           .from('lessons')
           .insert({
@@ -194,7 +185,6 @@ const AdminLessons = () => {
 
         if (error) throw error;
 
-        // Update course lessons count
         await supabase
           .from('courses')
           .update({ 
@@ -209,7 +199,6 @@ const AdminLessons = () => {
         });
       }
 
-      // Reset state and refetch lessons
       setIsEditing(false);
       setSelectedLesson(null);
       setOpenDialog(false);
@@ -223,7 +212,6 @@ const AdminLessons = () => {
     }
   };
 
-  // Handle lesson edit
   const handleEditLesson = (lesson: Lesson) => {
     setSelectedLesson(lesson);
     setIsEditing(true);
@@ -231,7 +219,6 @@ const AdminLessons = () => {
     setOpenDialog(true);
   };
 
-  // Handle lesson delete
   const handleDeleteLesson = async (lessonId: string) => {
     if (!confirm("Are you sure you want to delete this lesson? This action cannot be undone.")) {
       return;
@@ -245,7 +232,6 @@ const AdminLessons = () => {
 
       if (error) throw error;
 
-      // Update course lessons count
       await supabase
         .from('courses')
         .update({ 
@@ -269,12 +255,10 @@ const AdminLessons = () => {
     }
   };
 
-  // Handle lesson reordering
   const handleReorderLesson = async (lessonId: string, direction: 'up' | 'down') => {
     const lessonIndex = lessons.findIndex(l => l.id === lessonId);
     if (lessonIndex === -1) return;
 
-    // Can't move first item up or last item down
     if ((direction === 'up' && lessonIndex === 0) || 
         (direction === 'down' && lessonIndex === lessons.length - 1)) {
       return;
@@ -283,25 +267,21 @@ const AdminLessons = () => {
     const newIndex = direction === 'up' ? lessonIndex - 1 : lessonIndex + 1;
     const updatedLessons = [...lessons];
     
-    // Swap the order_index values
     const tempOrderIndex = updatedLessons[lessonIndex].order_index;
     updatedLessons[lessonIndex].order_index = updatedLessons[newIndex].order_index;
     updatedLessons[newIndex].order_index = tempOrderIndex;
 
     try {
-      // Update first lesson's order
       await supabase
         .from('lessons')
         .update({ order_index: updatedLessons[lessonIndex].order_index })
         .eq('id', updatedLessons[lessonIndex].id);
 
-      // Update second lesson's order
       await supabase
         .from('lessons')
         .update({ order_index: updatedLessons[newIndex].order_index })
         .eq('id', updatedLessons[newIndex].id);
 
-      // Refresh the lessons
       fetchCourseAndLessons();
     } catch (error: any) {
       toast({
@@ -310,6 +290,39 @@ const AdminLessons = () => {
         variant: 'destructive',
       });
     }
+  };
+
+  const handleYoutubeSearch = async () => {
+    if (!youtubeSearchTerm) return;
+    
+    setYoutubeSearching(true);
+    try {
+      const apiKey = 'AIzaSyAWiuy8hMIeBj2BWKPCSgO_kILcsDhpB1E';
+      const results = await searchYouTubeVideos(youtubeSearchTerm, apiKey, 5);
+      setYoutubeResults(results);
+    } catch (error) {
+      console.error('Error searching YouTube:', error);
+      toast({
+        title: 'YouTube search failed',
+        description: 'Could not fetch YouTube videos. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setYoutubeSearching(false);
+    }
+  };
+
+  const useYoutubeVideo = (video: any) => {
+    const videoId = video.id.videoId;
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const title = video.snippet.title;
+    
+    form.setValue('video_url', videoUrl);
+    if (!form.getValues('title')) {
+      form.setValue('title', title);
+    }
+    
+    setShowYoutubeSearch(false);
   };
 
   return (
@@ -359,7 +372,7 @@ const AdminLessons = () => {
                       <Plus className="mr-2 h-4 w-4" /> Add New Lesson
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[525px]">
+                  <DialogContent className="sm:max-w-[600px]">
                     <DialogHeader>
                       <DialogTitle>{isEditing ? 'Edit Lesson' : 'Add New Lesson'}</DialogTitle>
                       <DialogDescription>
@@ -428,10 +441,22 @@ const AdminLessons = () => {
                             name="video_url"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Video URL</FormLabel>
+                                <div className="flex justify-between items-center">
+                                  <FormLabel>Video URL</FormLabel>
+                                  <Button 
+                                    type="button" 
+                                    variant="ghost" 
+                                    size="sm"
+                                    onClick={() => setShowYoutubeSearch(!showYoutubeSearch)}
+                                    className="h-6 px-2 text-xs"
+                                  >
+                                    <Youtube className="h-3 w-3 mr-1" />
+                                    {showYoutubeSearch ? 'Hide' : 'Search YouTube'}
+                                  </Button>
+                                </div>
                                 <FormControl>
                                   <Input 
-                                    placeholder="https://example.com/video.mp4" 
+                                    placeholder="https://example.com/video.mp4 or YouTube URL" 
                                     {...field}
                                     value={field.value || ''}
                                   />
@@ -441,6 +466,53 @@ const AdminLessons = () => {
                             )}
                           />
                         </div>
+                        
+                        {showYoutubeSearch && (
+                          <div className="border rounded-md p-3 bg-muted/20">
+                            <h4 className="text-sm font-medium mb-2">Search YouTube Videos</h4>
+                            <div className="flex gap-2 mb-3">
+                              <Input
+                                value={youtubeSearchTerm}
+                                onChange={(e) => setYoutubeSearchTerm(e.target.value)}
+                                placeholder="Search for educational videos..."
+                                className="flex-1"
+                              />
+                              <Button 
+                                type="button" 
+                                onClick={handleYoutubeSearch}
+                                disabled={youtubeSearching}
+                                size="sm"
+                              >
+                                {youtubeSearching ? 
+                                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent" /> : 
+                                  'Search'
+                                }
+                              </Button>
+                            </div>
+                            
+                            {youtubeResults.length > 0 && (
+                              <div className="max-h-[200px] overflow-y-auto space-y-2">
+                                {youtubeResults.map((video) => (
+                                  <div 
+                                    key={video.id.videoId} 
+                                    className="flex gap-2 p-2 hover:bg-muted rounded cursor-pointer"
+                                    onClick={() => useYoutubeVideo(video)}
+                                  >
+                                    <img 
+                                      src={video.snippet.thumbnails.default.url} 
+                                      alt={video.snippet.title}
+                                      className="w-16 h-12 object-cover rounded"
+                                    />
+                                    <div className="flex-1">
+                                      <p className="text-xs font-medium line-clamp-2">{video.snippet.title}</p>
+                                      <p className="text-xs text-muted-foreground">{video.snippet.channelTitle}</p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         
                         <DialogFooter>
                           <Button type="button" variant="outline" onClick={() => setOpenDialog(false)}>

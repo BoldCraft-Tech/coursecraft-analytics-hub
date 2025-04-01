@@ -333,7 +333,7 @@ const CourseDetail = () => {
                       variant="outline"
                       onClick={() => {
                         generateCertificate();
-                        return null; // Return null to satisfy ReactNode requirement
+                        return null; 
                       }}
                       disabled={loadingCertificate}
                       className="w-full sm:w-auto"

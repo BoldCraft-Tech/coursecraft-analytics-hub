@@ -40,12 +40,11 @@ export const fetchLessonsWithVideos = async (courseId: string): Promise<Lesson[]
     
     console.log(`Found ${lessons.length} lessons`);
     
-    // Since there's no videos table in the schema, we're adapting this to work with
-    // the current structure. Each lesson may have an optional video_url field
+    // Process and format video URLs if needed (YouTube or direct links)
     const lessonsWithVideos = lessons.map(lesson => ({
       ...lesson,
       // Safely access video_url or set to null if it doesn't exist
-      video_url: (lesson as any).video_url || null
+      video_url: lesson.video_url || null
     }));
     
     console.log('Returning lessons with videos:', lessonsWithVideos);
@@ -54,6 +53,27 @@ export const fetchLessonsWithVideos = async (courseId: string): Promise<Lesson[]
     console.error('Error in fetchLessonsWithVideos:', error);
     throw error;
   }
+};
+
+/**
+ * Get YouTube video ID from URL
+ */
+export const getYouTubeVideoId = (url: string): string | null => {
+  if (!url) return null;
+  
+  // Match YouTube URL patterns
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = url.match(regExp);
+  
+  return (match && match[2].length === 11) ? match[2] : null;
+};
+
+/**
+ * Generate embeddable YouTube URL
+ */
+export const getEmbeddableYouTubeUrl = (url: string): string | null => {
+  const videoId = getYouTubeVideoId(url);
+  return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
 };
 
 /**
@@ -93,6 +113,30 @@ export const updateLessonProgress = async (
     }
   } catch (error) {
     console.error('Error in updateLessonProgress:', error);
+    throw error;
+  }
+};
+
+/**
+ * Search YouTube videos using API
+ */
+export const searchYouTubeVideos = async (
+  query: string, 
+  apiKey: string, 
+  maxResults: number = 5
+): Promise<any[]> => {
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=${maxResults}&key=${apiKey}`;
+    
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`YouTube API error: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.items || [];
+  } catch (error) {
+    console.error('Error searching YouTube videos:', error);
     throw error;
   }
 };

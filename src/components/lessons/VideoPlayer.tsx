@@ -1,9 +1,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/components/ui/use-toast';
-import { updateLessonProgress } from '@/utils/courseVideoUtils';
+import { updateLessonProgress, getYouTubeVideoId, getEmbeddableYouTubeUrl } from '@/utils/courseVideoUtils';
 import { useAuth } from '@/hooks/useAuth';
-import { Play, Pause, Volume2, VolumeX, Maximize } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Youtube } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,6 +17,7 @@ interface VideoPlayerProps {
 const VideoPlayer = ({ videoUrl, lessonId, courseId }: VideoPlayerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
+  const youtubeRef = useRef<HTMLIFrameElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -24,12 +25,46 @@ const VideoPlayer = ({ videoUrl, lessonId, courseId }: VideoPlayerProps) => {
   const [isMuted, setIsMuted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [progressReported, setProgressReported] = useState<Record<number, boolean>>({});
+  const [isYouTubeVideo, setIsYouTubeVideo] = useState(false);
+  const [youtubeEmbedUrl, setYoutubeEmbedUrl] = useState<string | null>(null);
   
   const { user } = useAuth();
   const { toast } = useToast();
 
-  // Initialize video player when component mounts
+  // Check if the video is a YouTube video
   useEffect(() => {
+    if (!videoUrl) return;
+    
+    const youtubeId = getYouTubeVideoId(videoUrl);
+    setIsYouTubeVideo(!!youtubeId);
+    
+    if (youtubeId) {
+      const embedUrl = getEmbeddableYouTubeUrl(videoUrl);
+      setYoutubeEmbedUrl(embedUrl);
+      setLoading(false);
+      
+      // Report 25% progress initially for YouTube videos
+      // since we can't easily track progress
+      if (user) {
+        const timer = setTimeout(() => {
+          updateLessonProgress(user.id, courseId, lessonId, 25)
+            .then(() => {
+              console.log('Initial progress reported for YouTube video');
+            })
+            .catch(error => {
+              console.error('Error updating lesson progress:', error);
+            });
+        }, 5000);
+        
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [videoUrl, user, courseId, lessonId]);
+
+  // Initialize video player when component mounts (for direct videos)
+  useEffect(() => {
+    if (isYouTubeVideo || !videoUrl) return;
+    
     const video = videoRef.current;
     if (!video) return;
 
@@ -114,7 +149,23 @@ const VideoPlayer = ({ videoUrl, lessonId, courseId }: VideoPlayerProps) => {
       video.removeEventListener('play', updateVideoStatus);
       video.removeEventListener('pause', updateVideoStatus);
     };
-  }, [user, lessonId, courseId, toast]);
+  }, [user, lessonId, courseId, toast, isYouTubeVideo, videoUrl, progressReported]);
+
+  // Handle marking YouTube video as completed
+  const handleYouTubeCompleted = () => {
+    if (!user) return;
+    
+    updateLessonProgress(user.id, courseId, lessonId, 100)
+      .then(() => {
+        toast({
+          title: 'Lesson completed',
+          description: 'Great job! You\'ve marked this YouTube lesson as complete!',
+        });
+      })
+      .catch(error => {
+        console.error('Error updating lesson progress:', error);
+      });
+  };
 
   // Format time in MM:SS format
   const formatTime = (timeInSeconds: number) => {
@@ -175,7 +226,7 @@ const VideoPlayer = ({ videoUrl, lessonId, courseId }: VideoPlayerProps) => {
       ref={playerRef}
       className="relative rounded-lg overflow-hidden bg-black w-full"
     >
-      {loading && (
+      {loading && !isYouTubeVideo && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/30 z-10">
           <Skeleton className="h-full w-full" />
           <div className="absolute">
@@ -184,62 +235,90 @@ const VideoPlayer = ({ videoUrl, lessonId, courseId }: VideoPlayerProps) => {
         </div>
       )}
       
-      <video
-        ref={videoRef}
-        src={videoUrl}
-        className="w-full aspect-video"
-        playsInline
-        preload="metadata"
-      />
-      
-      <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
-        {/* Progress bar */}
-        <div 
-          className="w-full h-2 bg-white/20 rounded-full cursor-pointer mb-2 relative overflow-hidden"
-          onClick={handleSeek}
-        >
-          <div 
-            className="h-full bg-primary rounded-full transition-all duration-200"
-            style={{ width: `${progress}%` }}
-          />
+      {isYouTubeVideo ? (
+        <div className="aspect-video w-full">
+          {youtubeEmbedUrl ? (
+            <>
+              <iframe
+                ref={youtubeRef}
+                src={`${youtubeEmbedUrl}?autoplay=0&controls=1&rel=0`}
+                title="YouTube video player"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="w-full h-full aspect-video"
+              ></iframe>
+              <div className="mt-4 flex justify-end">
+                <Button onClick={handleYouTubeCompleted}>
+                  Mark as Completed
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-full bg-muted">
+              <p>Invalid YouTube URL</p>
+            </div>
+          )}
         </div>
-        
-        {/* Controls */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={togglePlay}
-              className="text-white hover:bg-white/20 hover:text-white"
+      ) : (
+        <>
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            className="w-full aspect-video"
+            playsInline
+            preload="metadata"
+          />
+          
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+            {/* Progress bar */}
+            <div 
+              className="w-full h-2 bg-white/20 rounded-full cursor-pointer mb-2 relative overflow-hidden"
+              onClick={handleSeek}
             >
-              {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-            </Button>
+              <div 
+                className="h-full bg-primary rounded-full transition-all duration-200"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
             
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={toggleMute}
-              className="text-white hover:bg-white/20 hover:text-white"
-            >
-              {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-            </Button>
-            
-            <div className="text-white text-sm">
-              {formatTime(currentTime)} / {formatTime(duration)}
+            {/* Controls */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={togglePlay}
+                  className="text-white hover:bg-white/20 hover:text-white"
+                >
+                  {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                </Button>
+                
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={toggleMute}
+                  className="text-white hover:bg-white/20 hover:text-white"
+                >
+                  {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+                </Button>
+                
+                <div className="text-white text-sm">
+                  {formatTime(currentTime)} / {formatTime(duration)}
+                </div>
+              </div>
+              
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={toggleFullscreen}
+                className="text-white hover:bg-white/20 hover:text-white"
+              >
+                <Maximize className="h-5 w-5" />
+              </Button>
             </div>
           </div>
-          
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={toggleFullscreen}
-            className="text-white hover:bg-white/20 hover:text-white"
-          >
-            <Maximize className="h-5 w-5" />
-          </Button>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 };

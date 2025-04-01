@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useNavigate } from 'react';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import CourseGrid, { Course } from '@/components/courses/CourseGrid';
@@ -8,9 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { Search, Bot } from 'lucide-react';
+import { Search, Bot, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 const Courses = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -23,8 +23,9 @@ const Courses = () => {
   const [aiRecommendations, setAiRecommendations] = useState<{ courses: Course[], message: string } | null>(null);
   const [showingRecommendations, setShowingRecommendations] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
-  // Fetch courses from Supabase
   useEffect(() => {
     const fetchCourses = async () => {
       setLoading(true);
@@ -37,7 +38,6 @@ const Courses = () => {
           throw error;
         }
         
-        // Transform data to match Course type if needed
         const formattedCourses = data.map(course => ({
           id: course.id,
           title: course.title,
@@ -58,7 +58,6 @@ const Courses = () => {
           description: "Please try again later",
           variant: "destructive",
         });
-        // Set some fallback data if fetch fails
         setCourses([]);
         setFilteredCourses([]);
       } finally {
@@ -69,7 +68,6 @@ const Courses = () => {
     fetchCourses();
   }, [toast]);
   
-  // Apply filters when filter states change
   useEffect(() => {
     if (showingRecommendations) {
       setShowingRecommendations(false);
@@ -77,7 +75,6 @@ const Courses = () => {
     
     let result = courses;
     
-    // Apply search filter
     if (searchTerm) {
       result = result.filter((course) => 
         course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -85,17 +82,14 @@ const Courses = () => {
       );
     }
     
-    // Apply category filter
     if (category && category !== 'all-categories') {
       result = result.filter((course) => course.category === category);
     }
     
-    // Apply level filter
     if (level && level !== 'all-levels') {
       result = result.filter((course) => course.level === level);
     }
     
-    // Apply duration filter (weeks)
     if (duration[0] < 12) {
       result = result.filter((course) => {
         const weeks = parseInt(course.duration.split(' ')[0]);
@@ -114,12 +108,10 @@ const Courses = () => {
     setShowingRecommendations(false);
   };
 
-  // Get AI recommendations based on selected filters
   const getAiRecommendations = async () => {
     try {
       setLoading(true);
       
-      // Use the category as "interests" input for the AI
       const interests = category !== 'all-categories' ? category : '';
       
       const response = await fetch('https://lmizrylbhbapimyuyajc.functions.supabase.co/course-recommendations', {
@@ -146,7 +138,6 @@ const Courses = () => {
       
       setShowingRecommendations(true);
       
-      // Show the AI message as a toast
       toast({
         title: "AI Recommendation",
         description: data.message,
@@ -165,6 +156,10 @@ const Courses = () => {
     }
   };
   
+  const handleAddCourse = () => {
+    navigate('/admin');
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -176,12 +171,18 @@ const Courses = () => {
               <p className="text-muted-foreground text-lg">
                 Discover practical courses designed specifically for rural learners. Filter by topic, difficulty, or duration to find the perfect fit for your goals.
               </p>
+              {user && (
+                <Button 
+                  onClick={handleAddCourse}
+                  className="mt-6 bg-primary text-white"
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Add New Course
+                </Button>
+              )}
             </div>
             
-            {/* Search and Filters */}
             <div className="glass-panel rounded-xl p-6 mb-12">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                {/* Search */}
                 <div className="col-span-1 md:col-span-3">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-5 w-5" />
@@ -195,7 +196,6 @@ const Courses = () => {
                   </div>
                 </div>
                 
-                {/* Category */}
                 <div>
                   <Label htmlFor="category" className="block mb-2">Category</Label>
                   <Select value={category} onValueChange={setCategory}>
@@ -213,7 +213,6 @@ const Courses = () => {
                   </Select>
                 </div>
                 
-                {/* Level */}
                 <div>
                   <Label htmlFor="level" className="block mb-2">Level</Label>
                   <Select value={level} onValueChange={setLevel}>
@@ -229,7 +228,6 @@ const Courses = () => {
                   </Select>
                 </div>
                 
-                {/* Duration */}
                 <div>
                   <div className="flex justify-between items-center mb-2">
                     <Label htmlFor="duration">Duration (up to {duration[0]} weeks)</Label>
@@ -265,7 +263,6 @@ const Courses = () => {
                 </Button>
               </div>
               
-              {/* AI Recommendation Message */}
               {showingRecommendations && aiRecommendations && (
                 <div className="mt-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
                   <div className="flex items-start">
@@ -276,7 +273,6 @@ const Courses = () => {
               )}
             </div>
             
-            {/* Courses Header */}
             <div className="mb-6">
               <h2 className="text-xl font-semibold">
                 {showingRecommendations 
@@ -290,7 +286,6 @@ const Courses = () => {
               </h2>
             </div>
             
-            {/* Loading State */}
             {loading && (
               <div className="text-center py-12">
                 <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent motion-reduce:animate-[spin_1.5s_linear_infinite]" role="status">
@@ -300,7 +295,6 @@ const Courses = () => {
               </div>
             )}
             
-            {/* Courses Grid */}
             {!loading && (showingRecommendations ? (
               aiRecommendations && aiRecommendations.courses.length > 0 ? (
                 <CourseGrid courses={aiRecommendations.courses} />
