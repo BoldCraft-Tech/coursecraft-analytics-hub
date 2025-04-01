@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
@@ -19,12 +18,18 @@ interface Lesson {
   completed?: boolean;
 }
 
+interface LessonNavigation {
+  id: string;
+  title: string;
+  order_index: number;
+}
+
 const LessonView = () => {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId: string }>();
   const [course, setCourse] = useState<any>(null);
   const [lesson, setLesson] = useState<Lesson | null>(null);
-  const [nextLesson, setNextLesson] = useState<Lesson | null>(null);
-  const [prevLesson, setPrevLesson] = useState<Lesson | null>(null);
+  const [nextLesson, setNextLesson] = useState<LessonNavigation | null>(null);
+  const [prevLesson, setPrevLesson] = useState<LessonNavigation | null>(null);
   const [isLessonCompleted, setIsLessonCompleted] = useState(false);
   const [progress, setProgress] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -111,25 +116,25 @@ const LessonView = () => {
           }
           
           // Update last accessed timestamp (don't await to avoid blocking UI)
-          supabase
+          const accessUpdate = supabase
             .from('user_lesson_progress')
             .upsert({
               user_id: user.id,
               lesson_id: lessonId,
               last_accessed: new Date().toISOString(),
               completed: progressData?.completed || false
-            })
-            .then(() => {
-              // Update enrollment last_accessed
-              return supabase
-                .from('enrollments')
-                .update({ last_accessed: new Date().toISOString() })
-                .eq('user_id', user.id)
-                .eq('course_id', courseId);
-            })
-            .catch(error => {
-              console.error('Error updating last accessed:', error);
             });
+            
+          accessUpdate.then(() => {
+            // Update enrollment last_accessed
+            return supabase
+              .from('enrollments')
+              .update({ last_accessed: new Date().toISOString() })
+              .eq('user_id', user.id)
+              .eq('course_id', courseId);
+          }).catch(error => {
+            console.error('Error updating last accessed:', error);
+          });
         }
       } catch (error: any) {
         console.error('Error fetching lesson details:', error);
@@ -176,12 +181,19 @@ const LessonView = () => {
       setIsLessonCompleted(newStatus);
       
       // Get count of completed lessons for the course
+      const { data: lessonsQuery } = await supabase
+        .from('lessons')
+        .select('id')
+        .eq('course_id', courseId);
+        
+      const lessonIds = lessonsQuery?.map(lesson => lesson.id) || [];
+      
       const { data: progressData, error: progressError } = await supabase
         .from('user_lesson_progress')
         .select('lesson_id')
         .eq('user_id', user.id)
         .eq('completed', true)
-        .in('lesson_id', supabase.from('lessons').select('id').eq('course_id', courseId));
+        .in('lesson_id', lessonIds);
         
       if (progressError) throw progressError;
       

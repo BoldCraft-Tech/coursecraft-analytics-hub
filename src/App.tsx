@@ -42,8 +42,7 @@ const App = () => (
             <Route path="/certificates" element={<RequireAuth><MyCertificates /></RequireAuth>} />
             
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFoun
-d />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
       </BrowserRouter>
