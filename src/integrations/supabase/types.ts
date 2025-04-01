@@ -58,6 +58,7 @@ export type Database = {
           image: string | null
           lessons: number | null
           level: string
+          owner: string | null
           students: number | null
           title: string
           updated_at: string | null
@@ -71,6 +72,7 @@ export type Database = {
           image?: string | null
           lessons?: number | null
           level: string
+          owner?: string | null
           students?: number | null
           title: string
           updated_at?: string | null
@@ -84,6 +86,7 @@ export type Database = {
           image?: string | null
           lessons?: number | null
           level?: string
+          owner?: string | null
           students?: number | null
           title?: string
           updated_at?: string | null

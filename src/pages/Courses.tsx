@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
@@ -122,6 +123,7 @@ const Courses = () => {
           duration: newCourse.duration || '1-2 hours',
           lessons: 0,
           students: 0,
+          owner: user.id // Set the owner to the current user's ID
         })
         .select()
         .single();
