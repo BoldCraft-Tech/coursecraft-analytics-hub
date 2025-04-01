@@ -1,5 +1,4 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
@@ -11,43 +10,64 @@ import { Bot, SendHorizontal } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 
+const CATEGORY_KEYWORDS = {
+  Technology: ['technology', 'tech', 'software', 'coding', 'programming', 'computer', 'digital', 'web', 'app', 'mobile', 'data', 'online', 'internet', 'it'],
+  Agriculture: ['agriculture', 'farming', 'crop', 'farm', 'soil', 'plant', 'harvest', 'livestock', 'organic', 'sustainable', 'garden', 'seed', 'irrigation'],
+  Business: ['business', 'entrepreneur', 'marketing', 'finance', 'management', 'startup', 'sales', 'money', 'profit', 'market', 'company', 'commerce', 'trade'],
+  Health: ['health', 'medical', 'healthcare', 'medicine', 'wellness', 'nutrition', 'fitness', 'diet', 'mental health', 'physical', 'therapy', 'disease'],
+  Education: ['education', 'learning', 'teach', 'school', 'academic', 'study', 'course', 'knowledge', 'training', 'skill', 'lesson', 'learn']
+};
+
+const LEVEL_KEYWORDS = {
+  Beginner: ['beginner', 'basic', 'fundamental', 'introduction', 'start', 'new', 'novice', 'elementary', 'first time', 'starting out', 'entry'],
+  Intermediate: ['intermediate', 'middle', 'moderate', 'average', 'some experience', 'familiar', 'practiced'],
+  Advanced: ['advanced', 'expert', 'professional', 'experienced', 'proficient', 'specialized', 'master', 'high level', 'in-depth']
+};
+
 const Learning = () => {
   const [message, setMessage] = useState('');
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
   const [interests, setInterests] = useState<string>('');
   const [level, setLevel] = useState<string>('Beginner');
+  const [keywords, setKeywords] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
+  useEffect(() => {
+    if (keywords.length > 0) {
+      const extractedInterests = extractInterests(keywords.join(' '));
+      const extractedLevel = extractLevel(keywords.join(' '));
+      
+      if (extractedInterests) setInterests(extractedInterests);
+      if (extractedLevel) setLevel(extractedLevel);
+    }
+  }, [keywords]);
+
   const handleMessageSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
 
-    // Add user message to chat
     const userMessage = { role: 'user' as const, content: message };
     setChatHistory(prev => [...prev, userMessage]);
     
     setIsLoading(true);
 
     try {
-      // Simplified AI processing - in a real app, this would call an AI endpoint
-      // For now, we'll extract keywords from the message
+      const extractedKeywords = extractKeywords(message);
+      setKeywords(prev => [...prev, ...extractedKeywords]);
+      
       const extractedInterests = extractInterests(message);
       const extractedLevel = extractLevel(message);
       
-      // Update state with extracted information
       if (extractedInterests) setInterests(extractedInterests);
       if (extractedLevel) setLevel(extractedLevel);
       
-      // Create assistant response
-      const responseText = generateResponse(extractedInterests, extractedLevel);
+      const responseText = generateResponse(extractedInterests, extractedLevel, extractedKeywords);
       
-      // Simulate network delay
       await new Promise(resolve => setTimeout(resolve, 800));
       
-      // Add assistant response to chat
       setChatHistory(prev => [...prev, { role: 'assistant', content: responseText }]);
     } catch (error) {
       console.error('Error processing message:', error);
@@ -62,31 +82,62 @@ const Learning = () => {
     }
   };
 
-  // Helper function to extract interests from message
+  const extractKeywords = (text: string): string[] => {
+    const lowerText = text.toLowerCase();
+    
+    const words = lowerText.split(/\s+/);
+    const phrases = [];
+    
+    for (let i = 0; i < words.length; i++) {
+      phrases.push(words[i]);
+      if (i + 1 < words.length) phrases.push(`${words[i]} ${words[i + 1]}`);
+      if (i + 2 < words.length) phrases.push(`${words[i]} ${words[i + 1]} ${words[i + 2]}`);
+    }
+    
+    const stopWords = ['the', 'and', 'or', 'in', 'on', 'at', 'to', 'for', 'with', 'about', 'is', 'are', 'was', 'were', 'be', 'been'];
+    const filteredKeywords = phrases.filter(word => 
+      word.length > 2 && !stopWords.includes(word)
+    );
+    
+    return [...new Set(filteredKeywords)];
+  };
+
   const extractInterests = (text: string): string => {
-    const categories = ['Technology', 'Agriculture', 'Business', 'Health', 'Education'];
-    for (const category of categories) {
-      if (text.toLowerCase().includes(category.toLowerCase())) {
-        return category;
+    const lowerText = text.toLowerCase();
+    
+    for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+      for (const keyword of keywords) {
+        if (lowerText.includes(keyword.toLowerCase())) {
+          return category;
+        }
       }
     }
     return 'Technology'; // Default
   };
 
-  // Helper function to extract level from message
   const extractLevel = (text: string): string => {
-    const levels = ['Beginner', 'Intermediate', 'Advanced'];
-    for (const level of levels) {
-      if (text.toLowerCase().includes(level.toLowerCase())) {
-        return level;
+    const lowerText = text.toLowerCase();
+    
+    for (const [level, keywords] of Object.entries(LEVEL_KEYWORDS)) {
+      for (const keyword of keywords) {
+        if (lowerText.includes(keyword.toLowerCase())) {
+          return level;
+        }
       }
     }
     return 'Beginner'; // Default
   };
 
-  // Generate a response based on extracted info
-  const generateResponse = (interests: string, level: string): string => {
-    return `I've found some ${level} level courses in ${interests} that might interest you. Take a look at the recommendations below.`;
+  const generateResponse = (interests: string, level: string, keywords: string[]): string => {
+    let response = `I've found some ${level} level courses in ${interests} that might interest you.`;
+    
+    if (keywords.length > 0) {
+      const keywordPreview = keywords.slice(0, 3).join(', ');
+      response += ` Based on keywords like "${keywordPreview}", I've tailored these recommendations for you.`;
+    }
+    
+    response += " Take a look at the recommendations below.";
+    return response;
   };
 
   return (
@@ -97,7 +148,6 @@ const Learning = () => {
           <h1 className="text-2xl md:text-3xl font-bold mb-4 md:mb-8">Personalized Learning</h1>
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8">
-            {/* Chat component - stacked on mobile, side-by-side on desktop */}
             <div className={`${isMobile ? 'order-2' : 'order-1'} lg:col-span-1`}>
               <Card className="h-full shadow-sm">
                 <CardHeader className="pb-2">
@@ -158,7 +208,6 @@ const Learning = () => {
               </Card>
             </div>
             
-            {/* Recommendations component - stacked on mobile, side-by-side on desktop */}
             <div className={`${isMobile ? 'order-1' : 'order-2'} lg:col-span-2`}>
               <AIRecommendations interests={interests} level={level} />
             </div>
