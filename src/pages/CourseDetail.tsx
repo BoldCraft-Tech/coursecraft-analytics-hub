@@ -240,7 +240,7 @@ const CourseDetail = () => {
   };
 
   const handleEnrollButtonClick = () => {
-    return null;
+    return undefined;
   };
 
   if (loading) {

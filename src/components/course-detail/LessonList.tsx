@@ -50,23 +50,34 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
     setLoadingLessonId(lessonId);
 
     try {
-      if (currentStatus) {
-        // Mark as incomplete
+      // First check if a record already exists
+      const { data: existingProgress } = await supabase
+        .from('user_lesson_progress')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('lesson_id', lessonId)
+        .maybeSingle();
+
+      if (existingProgress) {
+        // Update the existing record
         const { error } = await supabase
           .from('user_lesson_progress')
-          .update({ completed: false, last_accessed: new Date().toISOString() })
+          .update({ 
+            completed: !currentStatus, 
+            last_accessed: new Date().toISOString() 
+          })
           .eq('user_id', user.id)
           .eq('lesson_id', lessonId);
           
         if (error) throw error;
       } else {
-        // Mark as complete (upsert in case the record doesn't exist yet)
+        // Insert a new record
         const { error } = await supabase
           .from('user_lesson_progress')
-          .upsert({
+          .insert({
             user_id: user.id,
             lesson_id: lessonId,
-            completed: true,
+            completed: !currentStatus,
             last_accessed: new Date().toISOString()
           });
           
