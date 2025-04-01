@@ -314,9 +314,11 @@ const AdminLessons = () => {
     const [, drag] = useDrag({
       type: 'LESSON',
       item: { id: lesson.id },
-      begin: () => {
-        handleDragStart(lesson.id);
-        return { id: lesson.id };
+      collect: (monitor) => {
+        if (monitor.isDragging()) {
+          handleDragStart(lesson.id);
+        }
+        return {};
       },
     });
   

@@ -335,10 +335,7 @@ const CourseDetail = () => {
                   {enrollment && enrollment.progress === 100 && !certificateId && (
                     <Button 
                       variant="outline"
-                      onClick={() => {
-                        generateCertificate();
-                        return null;
-                      }}
+                      onClick={generateCertificate}
                       disabled={loadingCertificate}
                       className="w-full sm:w-auto"
                     >
@@ -354,10 +351,7 @@ const CourseDetail = () => {
                   {user && (
                     <Button 
                       variant="outline"
-                      onClick={() => {
-                        navigate(`/admin/courses/${course.id}/lessons`);
-                        return null;
-                      }}
+                      onClick={() => navigate(`/admin/courses/${course.id}/lessons`)}
                       className="w-full sm:w-auto"
                     >
                       Manage Lessons
