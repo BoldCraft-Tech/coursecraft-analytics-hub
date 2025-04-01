@@ -8,10 +8,9 @@ schemas = ["public", "storage"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
-[[api.functions]]
-name = "course-recommendations"
+[functions]
+[functions.course-recommendations]
 verify_jwt = false
 
-[[api.functions]]
-name = "seed-courses"
+[functions.seed-courses]
 verify_jwt = false
