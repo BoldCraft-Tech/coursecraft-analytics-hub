@@ -14,3 +14,7 @@ verify_jwt = false
 
 [functions.seed-courses]
 verify_jwt = false
+
+[functions.add-video-lessons]
+verify_jwt = true
+

@@ -2,11 +2,12 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { CheckCircle, Circle, Clock, Play, Lock, Video } from 'lucide-react';
+import { CheckCircle, Circle, Clock, Play, Lock, Video, FileText } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { Badge } from '@/components/ui/badge';
 
 interface Lesson {
   id: string;
@@ -101,6 +102,13 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
     navigate(`/courses/${courseId}/lessons/${lessonId}`);
   };
 
+  const getLessonTypeIcon = (lesson: Lesson) => {
+    if (lesson.video_url) {
+      return <Video className="h-3 w-3 ml-2 text-accent" />;
+    }
+    return <FileText className="h-3 w-3 ml-2 text-blue-500" />;
+  };
+
   return (
     <Accordion 
       type="single" 
@@ -110,7 +118,7 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
       className="w-full"
     >
       {sortedLessons.map((lesson) => (
-        <AccordionItem key={lesson.id} value={lesson.id} className="border border-border rounded-lg mb-2">
+        <AccordionItem key={lesson.id} value={lesson.id} className="border border-border rounded-lg mb-2 overflow-hidden hover:shadow-sm transition-shadow">
           <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-muted/50">
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center">
@@ -127,7 +135,10 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
                 )}
                 <span className="text-sm font-medium">{lesson.order_index}. {lesson.title}</span>
                 {lesson.video_url && (
-                  <Video className="h-3 w-3 ml-2 text-blue-500" />
+                  <Badge variant="outline" className="ml-2 bg-accent/10 text-accent-foreground border-accent/20 text-xs">
+                    <Video className="h-3 w-3 mr-1" />
+                    Video
+                  </Badge>
                 )}
               </div>
               <div className="flex items-center text-xs text-muted-foreground">
@@ -136,7 +147,7 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
               </div>
             </div>
           </AccordionTrigger>
-          <AccordionContent className="px-4 pb-4">
+          <AccordionContent className="px-4 pb-4 bg-muted/5">
             <div className="mt-2 mb-4 pl-7 text-sm">
               {lesson.content}
             </div>
@@ -153,6 +164,7 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
                 <Button
                   size="sm"
                   onClick={() => handleStartLesson(lesson.id)}
+                  className="bg-primary hover:bg-primary/90"
                 >
                   <Play className="h-3 w-3 mr-1" />
                   {lesson.completed ? 'Review Lesson' : 'Start Lesson'}

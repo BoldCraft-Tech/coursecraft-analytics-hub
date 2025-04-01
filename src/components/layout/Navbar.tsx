@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Menu, X, ChevronDown, User } from 'lucide-react';
+import { Menu, X, ChevronDown, User, Video, BookOpen, Home, Info, Newspaper, Users } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import {
   DropdownMenu,
@@ -40,13 +40,15 @@ const Navbar = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
-  const navLinks = [
-    { name: 'Home', path: '/' },
-    { name: 'Courses', path: '/courses' },
-    { name: 'About', path: '/about' },
+  // Public navigation links (shown when user is not logged in)
+  const publicNavLinks = [
+    { name: 'Home', path: '/', icon: <Home className="h-4 w-4 mr-2" /> },
+    { name: 'Courses', path: '/courses', icon: <BookOpen className="h-4 w-4 mr-2" /> },
+    { name: 'About', path: '/about', icon: <Info className="h-4 w-4 mr-2" /> },
     { 
       name: 'Resources',
       path: '#',
+      icon: <Newspaper className="h-4 w-4 mr-2" />,
       dropdown: [
         { name: 'Blog', path: '/blog' },
         { name: 'Documentation', path: '/docs' },
@@ -55,12 +57,17 @@ const Navbar = () => {
     },
   ];
 
-  const authLinks = [
-    { name: 'Dashboard', path: '/dashboard' },
-    { name: 'My Learning', path: '/learning' },
-    { name: 'My Courses', path: '/my-courses' },
-    { name: 'Certificates', path: '/certificates' },
+  // Authenticated user navigation links
+  const authNavLinks = [
+    { name: 'Dashboard', path: '/dashboard', icon: <Home className="h-4 w-4 mr-2" /> },
+    { name: 'My Learning', path: '/learning', icon: <BookOpen className="h-4 w-4 mr-2" /> },
+    { name: 'My Courses', path: '/my-courses', icon: <Video className="h-4 w-4 mr-2" /> },
+    { name: 'Certificates', path: '/certificates', icon: <Award className="h-4 w-4 mr-2" /> },
+    { name: 'Browse Courses', path: '/courses', icon: <Users className="h-4 w-4 mr-2" /> },
   ];
+
+  // Use the appropriate navigation links based on authentication status
+  const navLinks = user ? authNavLinks : publicNavLinks;
 
   return (
     <header 
@@ -82,6 +89,7 @@ const Navbar = () => {
               link.dropdown ? (
                 <div key={link.name} className="relative group">
                   <button className="flex items-center text-foreground/80 hover:text-foreground transition-colors py-2">
+                    {link.icon}
                     {link.name}
                     <ChevronDown className="ml-1 h-4 w-4" />
                   </button>
@@ -103,26 +111,14 @@ const Navbar = () => {
                 <Link 
                   key={link.name} 
                   to={link.path} 
-                  className={`text-foreground/80 hover:text-foreground transition-colors ${
+                  className={`flex items-center text-foreground/80 hover:text-foreground transition-colors ${
                     location.pathname === link.path ? 'text-foreground font-medium' : ''
                   }`}
                 >
+                  {link.icon}
                   {link.name}
                 </Link>
               )
-            ))}
-
-            {/* Show these links only when user is authenticated */}
-            {user && authLinks.map((link) => (
-              <Link 
-                key={link.name} 
-                to={link.path} 
-                className={`text-foreground/80 hover:text-foreground transition-colors ${
-                  location.pathname === link.path ? 'text-foreground font-medium' : ''
-                }`}
-              >
-                {link.name}
-              </Link>
             ))}
           </nav>
 
@@ -131,11 +127,14 @@ const Navbar = () => {
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="rounded-full h-10 w-10 p-0">
-                    <User className="h-5 w-5" />
+                  <Button variant="ghost" size="sm" className="rounded-full h-10 w-10 p-0 bg-primary/10 hover:bg-primary/20">
+                    <User className="h-5 w-5 text-primary" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
+                  <div className="px-2 py-1.5 text-sm font-medium border-b border-border mb-1">
+                    {user.email}
+                  </div>
                   <DropdownMenuItem asChild>
                     <Link to="/dashboard" className="cursor-pointer w-full">Dashboard</Link>
                   </DropdownMenuItem>
@@ -189,7 +188,10 @@ const Navbar = () => {
             <div key={link.name}>
               {link.dropdown ? (
                 <div className="space-y-2">
-                  <div className="font-medium">{link.name}</div>
+                  <div className="font-medium flex items-center">
+                    {link.icon}
+                    {link.name}
+                  </div>
                   <div className="pl-4 space-y-2 border-l border-border">
                     {link.dropdown.map((dropdownLink) => (
                       <Link 
@@ -206,10 +208,11 @@ const Navbar = () => {
                 <Link 
                   key={link.name} 
                   to={link.path} 
-                  className={`block py-2 text-foreground/80 hover:text-foreground transition-colors ${
+                  className={`flex items-center py-2 text-foreground/80 hover:text-foreground transition-colors ${
                     location.pathname === link.path ? 'text-foreground font-medium' : ''
                   }`}
                 >
+                  {link.icon}
                   {link.name}
                 </Link>
               )}
@@ -221,15 +224,7 @@ const Navbar = () => {
             <>
               <div className="pt-4 border-t border-border">
                 <div className="font-medium mb-2">Account</div>
-                {authLinks.map((link) => (
-                  <Link 
-                    key={link.name}
-                    to={link.path}
-                    className="block py-2 pl-2 text-foreground/80 hover:text-foreground transition-colors"
-                  >
-                    {link.name}
-                  </Link>
-                ))}
+                <div className="text-sm text-muted-foreground mb-4">{user.email}</div>
                 <button 
                   onClick={signOut}
                   className="block w-full text-left py-2 pl-2 text-red-500 hover:text-red-600 transition-colors"
