@@ -1,9 +1,8 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
-import CourseGrid from '@/components/courses/CourseGrid';
+import CourseGridWrapper from '@/components/courses/CourseGridWrapper';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -15,7 +14,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
-// Define course categories
 const CATEGORIES = [
   'Agriculture', 
   'Healthcare', 
@@ -26,7 +24,6 @@ const CATEGORIES = [
   'Community Development'
 ];
 
-// Define course levels
 const LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
 
 const Courses = () => {
@@ -38,7 +35,6 @@ const Courses = () => {
   const [addCourseOpen, setAddCourseOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // New course form state
   const [newCourse, setNewCourse] = useState({
     title: '',
     description: '',
@@ -92,7 +88,7 @@ const Courses = () => {
       );
     }
     
-    if (selectedCategory) {
+    if (selectedCategory && selectedCategory !== 'all') {
       filtered = filtered.filter(course => 
         course.category === selectedCategory
       );
@@ -123,7 +119,7 @@ const Courses = () => {
           description: newCourse.description,
           category: newCourse.category,
           level: newCourse.level,
-          duration: newCourse.duration || '1-2 hours', // Default value
+          duration: newCourse.duration || '1-2 hours',
           lessons: 0,
           students: 0,
         })
@@ -137,7 +133,6 @@ const Courses = () => {
         description: 'Your course has been created successfully',
       });
       
-      // Reset form and close dialog
       setNewCourse({
         title: '',
         description: '',
@@ -147,10 +142,8 @@ const Courses = () => {
       });
       setAddCourseOpen(false);
       
-      // Refresh courses list
       fetchCourses();
       
-      // Navigate to the course detail page to add lessons
       navigate(`/admin/courses/${data.id}/lessons`);
       
     } catch (error) {
@@ -300,7 +293,7 @@ const Courses = () => {
                   <SelectValue placeholder="All Categories" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Categories</SelectItem>
+                  <SelectItem key="all" value="all">All Categories</SelectItem>
                   {CATEGORIES.map((category) => (
                     <SelectItem key={category} value={category}>
                       {category}
@@ -310,9 +303,9 @@ const Courses = () => {
               </Select>
             </div>
             
-            <CourseGrid 
-              courses={filteredCourses} 
-              loading={loading} 
+            <CourseGridWrapper 
+              courses={filteredCourses}
+              isLoading={loading}
               emptyMessage="No courses found. Try adjusting your search or filters."
             />
           </div>

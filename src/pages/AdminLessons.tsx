@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
@@ -6,135 +5,83 @@ import Footer from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Plus, Trash2, Edit, MoveUp, MoveDown, Video } from 'lucide-react';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { Plus, Pencil, Trash2, GripVertical } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DndProvider, useDrag, useDrop } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useAuth } from '@/hooks/useAuth';
-import { searchYouTubeVideos } from '@/utils/courseVideoUtils';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-const YOUTUBE_API_KEY = 'AIzaSyAWiuy8hMIeBj2BWKPCSgO_kILcsDhpB1E';
+interface Lesson {
+  id: string;
+  title: string;
+  content: string;
+  duration: number;
+  order_index: number;
+  course_id: string;
+  created_at: string;
+  updated_at: string;
+  video_url?: string;
+}
 
 const AdminLessons = () => {
   const { courseId } = useParams();
-  const [course, setCourse] = useState(null);
-  const [lessons, setLessons] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isAddLessonOpen, setIsAddLessonOpen] = useState(false);
-  const [isEditLessonOpen, setIsEditLessonOpen] = useState(false);
-  const [currentLesson, setCurrentLesson] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [videoSearchQuery, setVideoSearchQuery] = useState('');
-  const [videoSearchResults, setVideoSearchResults] = useState([]);
-  const [isSearchingVideos, setIsSearchingVideos] = useState(false);
-  
-  // Form state for adding/editing lessons
-  const [lessonForm, setLessonForm] = useState({
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [addLessonOpen, setAddLessonOpen] = useState(false);
+  const [editLessonOpen, setEditLessonOpen] = useState(false);
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [newLesson, setNewLesson] = useState({
     title: '',
     content: '',
-    duration: 30,
+    duration: '',
     video_url: '',
   });
-  
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
-  const { user } = useAuth();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
-    if (!courseId) return;
-    fetchCourseAndLessons();
+    if (!user) {
+      navigate('/signin');
+    }
+  }, [user, navigate]);
+
+  useEffect(() => {
+    if (courseId) {
+      fetchLessons();
+    }
   }, [courseId]);
 
-  const fetchCourseAndLessons = async () => {
+  const fetchLessons = async () => {
     try {
-      setLoading(true);
-      
-      // Fetch course details
-      const { data: courseData, error: courseError } = await supabase
-        .from('courses')
-        .select('*')
-        .eq('id', courseId)
-        .single();
-        
-      if (courseError) throw courseError;
-      setCourse(courseData);
-      
-      // Fetch lessons
-      const { data: lessonsData, error: lessonsError } = await supabase
+      const { data, error } = await supabase
         .from('lessons')
         .select('*')
         .eq('course_id', courseId)
         .order('order_index', { ascending: true });
         
-      if (lessonsError) throw lessonsError;
-      setLessons(lessonsData || []);
+      if (error) throw error;
       
+      setLessons(data || []);
     } catch (error) {
-      console.error('Error fetching course or lessons:', error);
+      console.error('Error fetching lessons:', error);
       toast({
-        title: 'Error loading data',
-        description: error.message || 'Please try again later',
+        title: 'Error fetching lessons',
+        description: 'Please try again later',
         variant: 'destructive',
       });
-    } finally {
-      setLoading(false);
     }
   };
 
-  const searchVideos = async () => {
-    if (!videoSearchQuery.trim()) {
-      toast({
-        title: 'Please enter a search query',
-        description: 'Enter keywords to search for videos',
-      });
-      return;
-    }
-    
-    try {
-      setIsSearchingVideos(true);
-      
-      // Make sure to append the course topic to get more relevant results
-      const searchTerm = course ? `${videoSearchQuery} ${course.category} ${course.title}` : videoSearchQuery;
-      
-      const results = await searchYouTubeVideos(searchTerm, YOUTUBE_API_KEY, 8);
-      setVideoSearchResults(results);
-      
-    } catch (error) {
-      console.error('Error searching videos:', error);
-      toast({
-        title: 'Error searching videos',
-        description: error.message || 'Please try again later',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSearchingVideos(false);
-    }
-  };
-
-  const selectVideo = (video) => {
-    const videoId = video.id.videoId;
-    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    
-    setLessonForm({
-      ...lessonForm,
-      video_url: videoUrl,
-    });
-    
-    toast({
-      title: 'Video selected',
-      description: 'YouTube video added to lesson',
-    });
-  };
-
-  const handleAddLesson = async (e) => {
+  const handleAddLesson = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!lessonForm.title || !lessonForm.content || !lessonForm.duration) {
+    if (!newLesson.title || !newLesson.content) {
       toast({
         title: 'Missing information',
         description: 'Please fill in all required fields',
@@ -146,53 +93,45 @@ const AdminLessons = () => {
     try {
       setIsSubmitting(true);
       
-      // Calculate the next order index
-      const nextOrderIndex = lessons.length > 0 
-        ? Math.max(...lessons.map(lesson => lesson.order_index)) + 1 
-        : 1;
+      // Convert duration to number before sending to the database
+      const durationNumber = parseInt(newLesson.duration) || 0;
       
       const { data, error } = await supabase
         .from('lessons')
         .insert({
-          title: lessonForm.title,
-          content: lessonForm.content,
-          duration: parseInt(lessonForm.duration),
-          order_index: nextOrderIndex,
+          title: newLesson.title,
+          content: newLesson.content,
           course_id: courseId,
-          video_url: lessonForm.video_url || null,
+          video_url: newLesson.video_url || null,
+          order_index: lessons.length,
+          duration: durationNumber, // Convert to number
         })
         .select()
         .single();
         
       if (error) throw error;
       
-      // Update course lessons count
-      await supabase
-        .from('courses')
-        .update({ lessons: lessons.length + 1 })
-        .eq('id', courseId);
-      
       toast({
-        title: 'Lesson added',
-        description: 'The lesson has been added successfully',
+        title: 'Lesson created',
+        description: 'Your lesson has been created successfully',
       });
       
-      // Reset form and close dialog
-      setLessonForm({
+      // Reset form
+      setNewLesson({
         title: '',
         content: '',
-        duration: 30,
+        duration: '',
         video_url: '',
       });
-      setIsAddLessonOpen(false);
       
-      // Refresh lessons
-      fetchCourseAndLessons();
+      // Close dialog and refresh lessons
+      setAddLessonOpen(false);
+      fetchLessons();
       
     } catch (error) {
-      console.error('Error adding lesson:', error);
+      console.error('Error creating lesson:', error);
       toast({
-        title: 'Error adding lesson',
+        title: 'Error creating lesson',
         description: error.message || 'Please try again later',
         variant: 'destructive',
       });
@@ -201,19 +140,10 @@ const AdminLessons = () => {
     }
   };
 
-  const handleEditLesson = async (e) => {
+  const handleEditLesson = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!currentLesson) return;
-    
-    if (!lessonForm.title || !lessonForm.content || !lessonForm.duration) {
-      toast({
-        title: 'Missing information',
-        description: 'Please fill in all required fields',
-        variant: 'destructive',
-      });
-      return;
-    }
+    if (!selectedLesson?.id) return;
     
     try {
       setIsSubmitting(true);
@@ -221,32 +151,23 @@ const AdminLessons = () => {
       const { error } = await supabase
         .from('lessons')
         .update({
-          title: lessonForm.title,
-          content: lessonForm.content,
-          duration: parseInt(lessonForm.duration),
-          video_url: lessonForm.video_url || null,
+          title: selectedLesson.title,
+          content: selectedLesson.content,
+          duration: selectedLesson.duration,
+          video_url: selectedLesson.video_url || null,
         })
-        .eq('id', currentLesson.id);
+        .eq('id', selectedLesson.id);
         
       if (error) throw error;
       
       toast({
         title: 'Lesson updated',
-        description: 'The lesson has been updated successfully',
+        description: 'Lesson updated successfully',
       });
       
-      // Reset form and close dialog
-      setLessonForm({
-        title: '',
-        content: '',
-        duration: 30,
-        video_url: '',
-      });
-      setIsEditLessonOpen(false);
-      setCurrentLesson(null);
-      
-      // Refresh lessons
-      fetchCourseAndLessons();
+      // Close dialog and refresh lessons
+      setEditLessonOpen(false);
+      fetchLessons();
       
     } catch (error) {
       console.error('Error updating lesson:', error);
@@ -260,8 +181,14 @@ const AdminLessons = () => {
     }
   };
 
-  const handleDeleteLesson = async (lessonId) => {
+  const handleDeleteLesson = async (lessonId: string) => {
+    if (!window.confirm('Are you sure you want to delete this lesson?')) {
+      return;
+    }
+    
     try {
+      setIsSubmitting(true);
+      
       const { error } = await supabase
         .from('lessons')
         .delete()
@@ -269,19 +196,13 @@ const AdminLessons = () => {
         
       if (error) throw error;
       
-      // Update course lessons count
-      await supabase
-        .from('courses')
-        .update({ lessons: lessons.length - 1 })
-        .eq('id', courseId);
-      
       toast({
         title: 'Lesson deleted',
-        description: 'The lesson has been deleted successfully',
+        description: 'Lesson deleted successfully',
       });
       
       // Refresh lessons
-      fetchCourseAndLessons();
+      fetchLessons();
       
     } catch (error) {
       console.error('Error deleting lesson:', error);
@@ -290,97 +211,169 @@ const AdminLessons = () => {
         description: error.message || 'Please try again later',
         variant: 'destructive',
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const openEditLessonDialog = (lesson) => {
-    setCurrentLesson(lesson);
-    setLessonForm({
-      title: lesson.title,
-      content: lesson.content,
-      duration: lesson.duration,
-      video_url: lesson.video_url || '',
-    });
-    setIsEditLessonOpen(true);
-  };
-
-  const handleDragEnd = async (result) => {
-    if (!result.destination) return;
-    
-    const startIndex = result.source.index;
-    const endIndex = result.destination.index;
-    
-    if (startIndex === endIndex) return;
-    
+  const moveLesson = async (lessonId: string, direction: 'up' | 'down') => {
     try {
-      const updatedLessons = Array.from(lessons);
-      const [removed] = updatedLessons.splice(startIndex, 1);
-      updatedLessons.splice(endIndex, 0, removed);
+      const currentIndex = lessons.findIndex(lesson => lesson.id === lessonId);
+      const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
       
-      // Update lessons with new order indices
-      setLessons(updatedLessons.map((lesson, index) => ({
+      if (newIndex < 0 || newIndex >= lessons.length) return;
+      
+      const updatedLessons = [...lessons];
+      const [movedLesson] = updatedLessons.splice(currentIndex, 1);
+      updatedLessons.splice(newIndex, 0, movedLesson);
+      
+      // Re-order the lessons
+      const updatedWithIndices = updatedLessons.map((lesson, idx) => ({
         ...lesson,
-        order_index: index + 1,
-      })));
+        order_index: idx
+      }));
       
-      // Update order indices in database
-      for (const [index, lesson] of updatedLessons.entries()) {
-        await supabase
-          .from('lessons')
-          .update({ order_index: index + 1 })
-          .eq('id', lesson.id);
-      }
+      setLessons(updatedWithIndices);
+      
+      // Update order_index in database for both affected lessons
+      await Promise.all(
+        updatedWithIndices
+          .filter((_, idx) => idx === newIndex || idx === currentIndex)
+          .map(lesson => 
+            supabase
+              .from('lessons')
+              .update({ order_index: lesson.order_index })
+              .eq('id', lesson.id)
+          )
+      );
       
       toast({
-        title: 'Order updated',
-        description: 'Lesson order has been updated successfully',
+        title: 'Lesson reordered',
+        description: 'Lesson position updated successfully',
       });
-      
     } catch (error) {
-      console.error('Error updating lesson order:', error);
+      console.error('Error reordering lesson:', error);
       toast({
-        title: 'Error updating order',
+        title: 'Error reordering lesson',
         description: error.message || 'Please try again later',
         variant: 'destructive',
       });
-      
-      // Revert to previous state
-      fetchCourseAndLessons();
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <Navbar />
-        <main className="flex-grow pt-20 flex items-center justify-center">
-          <div className="text-center">
-            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent" role="status">
-              <span className="sr-only">Loading...</span>
-            </div>
-            <p className="mt-4 text-muted-foreground">Loading course and lessons...</p>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
+  const handleDragStart = (lessonId: string) => {
+    console.log(`Dragging started for lesson: ${lessonId}`);
+  };
+  
+  const handleDrop = async (draggedLessonId: string, targetLessonId: string) => {
+    if (draggedLessonId === targetLessonId) {
+      return;
+    }
+  
+    try {
+      const draggedIndex = lessons.findIndex(lesson => lesson.id === draggedLessonId);
+      const targetIndex = lessons.findIndex(lesson => lesson.id === targetLessonId);
+  
+      if (draggedIndex === -1 || targetIndex === -1) {
+        console.error("Dragged or target lesson not found in the array.");
+        return;
+      }
+  
+      const updatedLessons = [...lessons];
+      // Remove the dragged lesson from its original position
+      const [draggedLesson] = updatedLessons.splice(draggedIndex, 1);
+      // Insert the dragged lesson into the target position
+      updatedLessons.splice(targetIndex, 0, draggedLesson);
+  
+      // Optimistically update the state
+      const updatedWithIndices = updatedLessons.map((lesson, idx) => ({
+        ...lesson,
+        order_index: idx
+      }));
+      setLessons(updatedWithIndices);
+  
+      // Prepare updates for the database
+      const updates = updatedWithIndices.map(lesson =>
+        supabase
+          .from('lessons')
+          .update({ order_index: lesson.order_index })
+          .eq('id', lesson.id)
+      );
+  
+      // Execute all updates in parallel
+      await Promise.all(updates);
+  
+      toast({
+        title: 'Lessons reordered',
+        description: 'Lesson positions updated successfully',
+      });
+    } catch (error) {
+      console.error('Error reordering lessons:', error);
+      toast({
+        title: 'Error reordering lessons',
+        description: 'Failed to update lesson order. Please try again.',
+        variant: 'destructive',
+      });
+      // If there's an error, revert the state to the original
+      fetchLessons();
+    }
+  };
 
-  if (!course) {
+  const DraggableRow = ({ lesson }: { lesson: Lesson }) => {
+    const [, drag] = useDrag({
+      type: 'LESSON',
+      item: { id: lesson.id },
+      begin: () => {
+        handleDragStart(lesson.id);
+        return { id: lesson.id };
+      },
+    });
+  
+    const [{ isOver }, drop] = useDrop({
+      accept: 'LESSON',
+      drop: (item: any) => {
+        handleDrop(item.id, lesson.id);
+      },
+      collect: (monitor) => ({
+        isOver: !!monitor.isOver(),
+      }),
+    });
+  
     return (
-      <div className="min-h-screen flex flex-col">
-        <Navbar />
-        <main className="flex-grow pt-20 flex items-center justify-center">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold mb-2">Course not found</h2>
-            <p className="text-muted-foreground mb-6">The course you're looking for doesn't exist or has been removed</p>
-            <Button onClick={() => navigate('/courses')}>Back to Courses</Button>
-          </div>
-        </main>
-        <Footer />
-      </div>
+      <TableRow
+        ref={(node) => drag(drop(node))}
+        style={{
+          cursor: 'grab',
+          backgroundColor: isOver ? 'rgba(0,0,0,0.05)' : 'transparent',
+        }}
+      >
+        <TableCell className="font-medium">{lesson.title}</TableCell>
+        <TableCell>{lesson.duration} minutes</TableCell>
+        <TableCell className="text-right">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSelectedLesson(lesson);
+              setEditLessonOpen(true);
+            }}
+          >
+            <Pencil className="h-4 w-4 mr-2" />
+            Edit
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => handleDeleteLesson(lesson.id)}
+            disabled={isSubmitting}
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            {isSubmitting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </TableCell>
+      </TableRow>
     );
-  }
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -388,28 +381,20 @@ const AdminLessons = () => {
       <main className="flex-grow pt-20">
         <section className="py-12">
           <div className="container px-4 mx-auto">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Button variant="outline" size="sm" onClick={() => navigate(`/courses/${courseId}`)}>
-                    Back to Course
-                  </Button>
-                  <h1 className="text-2xl font-bold">Manage Lessons</h1>
-                </div>
-                <h2 className="text-xl font-semibold">{course.title}</h2>
-                <p className="text-muted-foreground mt-1">
-                  {course.lessons} {course.lessons === 1 ? 'lesson' : 'lessons'} | {course.category} | {course.level}
-                </p>
-              </div>
-              
-              <Dialog open={isAddLessonOpen} onOpenChange={setIsAddLessonOpen}>
+            <div className="flex justify-between items-center mb-8">
+              <h1 className="text-3xl font-bold">Manage Lessons</h1>
+              <Button onClick={() => navigate('/admin')}>Back to Dashboard</Button>
+            </div>
+            
+            <div className="mb-4">
+              <Dialog open={addLessonOpen} onOpenChange={setAddLessonOpen}>
                 <DialogTrigger asChild>
-                  <Button className="mt-4 md:mt-0">
+                  <Button>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Lesson
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[700px]">
+                <DialogContent className="sm:max-w-[525px]">
                   <DialogHeader>
                     <DialogTitle>Add New Lesson</DialogTitle>
                     <DialogDescription>
@@ -417,390 +402,150 @@ const AdminLessons = () => {
                     </DialogDescription>
                   </DialogHeader>
                   
-                  <Tabs defaultValue="details">
-                    <TabsList className="mb-4">
-                      <TabsTrigger value="details">Lesson Details</TabsTrigger>
-                      <TabsTrigger value="video">Add Video</TabsTrigger>
-                    </TabsList>
+                  <form onSubmit={handleAddLesson} className="space-y-4 mt-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="title">Lesson Title</Label>
+                      <Input
+                        id="title"
+                        placeholder="Enter lesson title"
+                        value={newLesson.title}
+                        onChange={(e) => setNewLesson({ ...newLesson, title: e.target.value })}
+                      />
+                    </div>
                     
-                    <TabsContent value="details">
-                      <form onSubmit={handleAddLesson} className="space-y-4 mt-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="title">Lesson Title</Label>
-                          <Input
-                            id="title"
-                            placeholder="Enter lesson title"
-                            value={lessonForm.title}
-                            onChange={(e) => setLessonForm({ ...lessonForm, title: e.target.value })}
-                          />
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label htmlFor="content">Content</Label>
-                          <Textarea
-                            id="content"
-                            placeholder="Enter lesson content"
-                            value={lessonForm.content}
-                            onChange={(e) => setLessonForm({ ...lessonForm, content: e.target.value })}
-                            rows={5}
-                          />
-                        </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="duration">Duration (minutes)</Label>
-                            <Input
-                              id="duration"
-                              type="number"
-                              min="1"
-                              placeholder="Enter duration in minutes"
-                              value={lessonForm.duration}
-                              onChange={(e) => setLessonForm({ ...lessonForm, duration: e.target.value })}
-                            />
-                          </div>
-                          
-                          <div className="space-y-2">
-                            <Label htmlFor="video_url">Video URL (optional)</Label>
-                            <Input
-                              id="video_url"
-                              placeholder="Enter YouTube or video URL"
-                              value={lessonForm.video_url}
-                              onChange={(e) => setLessonForm({ ...lessonForm, video_url: e.target.value })}
-                            />
-                          </div>
-                        </div>
-                        
-                        <DialogFooter>
-                          <Button
-                            type="submit"
-                            disabled={isSubmitting}
-                          >
-                            {isSubmitting ? 'Creating...' : 'Create Lesson'}
-                          </Button>
-                        </DialogFooter>
-                      </form>
-                    </TabsContent>
+                    <div className="space-y-2">
+                      <Label htmlFor="content">Content</Label>
+                      <Textarea
+                        id="content"
+                        placeholder="Enter lesson content"
+                        value={newLesson.content}
+                        onChange={(e) => setNewLesson({ ...newLesson, content: e.target.value })}
+                        rows={3}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="video_url">Video URL (Optional)</Label>
+                      <Input
+                        id="video_url"
+                        placeholder="Enter YouTube video URL"
+                        value={newLesson.video_url}
+                        onChange={(e) => setNewLesson({ ...newLesson, video_url: e.target.value })}
+                      />
+                    </div>
                     
-                    <TabsContent value="video">
-                      <div className="space-y-4">
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Search for YouTube videos"
-                            value={videoSearchQuery}
-                            onChange={(e) => setVideoSearchQuery(e.target.value)}
-                            className="flex-grow"
-                          />
-                          <Button 
-                            onClick={searchVideos}
-                            disabled={isSearchingVideos}
-                          >
-                            {isSearchingVideos ? 'Searching...' : 'Search'}
-                          </Button>
-                        </div>
-                        
-                        {lessonForm.video_url && (
-                          <div className="p-3 border rounded-md bg-muted/30">
-                            <p className="font-medium text-sm mb-1">Selected Video</p>
-                            <p className="text-xs text-muted-foreground break-all">{lessonForm.video_url}</p>
-                          </div>
-                        )}
-                        
-                        {videoSearchResults.length > 0 ? (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto p-1">
-                            {videoSearchResults.map((video) => (
-                              <Card key={video.id.videoId} className="overflow-hidden hover:shadow-md transition-shadow">
-                                <img
-                                  src={video.snippet.thumbnails.medium.url}
-                                  alt={video.snippet.title}
-                                  className="w-full h-32 object-cover"
-                                />
-                                <CardContent className="p-3">
-                                  <p className="font-medium text-sm line-clamp-2">{video.snippet.title}</p>
-                                  <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{video.snippet.channelTitle}</p>
-                                </CardContent>
-                                <CardFooter className="p-3 pt-0">
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    className="w-full"
-                                    onClick={() => selectVideo(video)}
-                                  >
-                                    <Video className="h-3 w-3 mr-1" />
-                                    Select Video
-                                  </Button>
-                                </CardFooter>
-                              </Card>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="text-center py-8 bg-muted/30 rounded-lg">
-                            {isSearchingVideos ? (
-                              <div className="flex flex-col items-center">
-                                <div className="h-6 w-6 animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
-                                <p className="text-muted-foreground mt-2">Searching for videos...</p>
-                              </div>
-                            ) : (
-                              <p className="text-muted-foreground">Search for YouTube videos to add to this lesson</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </TabsContent>
-                  </Tabs>
+                    <div className="space-y-2">
+                      <Label htmlFor="duration">Duration (minutes)</Label>
+                      <Input
+                        id="duration"
+                        type="number"
+                        placeholder="Enter lesson duration in minutes"
+                        value={newLesson.duration}
+                        onChange={(e) => setNewLesson({ ...newLesson, duration: e.target.value })}
+                      />
+                    </div>
+                    
+                    <DialogFooter>
+                      <Button
+                        type="submit"
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? 'Creating...' : 'Create Lesson'}
+                      </Button>
+                    </DialogFooter>
+                  </form>
                 </DialogContent>
               </Dialog>
             </div>
-            
-            <div className="glass-panel p-6 rounded-xl mb-8">
-              {lessons.length > 0 ? (
-                <DragDropContext onDragEnd={handleDragEnd}>
-                  <Droppable droppableId="lessons">
-                    {(provided) => (
-                      <div
-                        {...provided.droppableProps}
-                        ref={provided.innerRef}
-                        className="space-y-3"
-                      >
-                        {lessons.map((lesson, index) => (
-                          <Draggable key={lesson.id} draggableId={lesson.id} index={index}>
-                            {(provided) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className="border rounded-lg p-4 bg-card hover:shadow-sm transition-shadow"
-                              >
-                                <div className="flex justify-between items-start">
-                                  <div>
-                                    <div className="flex items-center">
-                                      <span className="text-sm font-medium text-muted-foreground mr-2">
-                                        {lesson.order_index}.
-                                      </span>
-                                      <h3 className="text-lg font-medium">{lesson.title}</h3>
-                                      
-                                      {lesson.video_url && (
-                                        <span className="ml-2 text-xs bg-blue-100 text-blue-800 rounded-full px-2 py-0.5 flex items-center">
-                                          <Video className="h-3 w-3 mr-1" />
-                                          Video
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-muted-foreground text-sm mt-1 line-clamp-2">
-                                      {lesson.content}
-                                    </p>
-                                    <div className="text-xs text-muted-foreground mt-2">
-                                      Duration: {lesson.duration} minutes
-                                    </div>
-                                  </div>
-                                  
-                                  <div className="flex gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => openEditLessonDialog(lesson)}
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                      <span className="sr-only">Edit</span>
-                                    </Button>
-                                    
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="text-destructive border-destructive hover:bg-destructive/10"
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                          <span className="sr-only">Delete</span>
-                                        </Button>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>Delete Lesson</AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            Are you sure you want to delete "{lesson.title}"? This action cannot be undone.
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                          <AlertDialogAction
-                                            onClick={() => handleDeleteLesson(lesson.id)}
-                                            className="bg-destructive hover:bg-destructive/90"
-                                          >
-                                            Delete
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </Draggable>
-                        ))}
-                        {provided.placeholder}
-                      </div>
-                    )}
-                  </Droppable>
-                </DragDropContext>
-              ) : (
-                <div className="text-center py-8 bg-muted/30 rounded-lg">
-                  <p className="text-muted-foreground mb-4">No lessons added for this course yet</p>
-                  <Button
-                    onClick={() => setIsAddLessonOpen(true)}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add First Lesson
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-      </main>
-      
-      <Dialog open={isEditLessonOpen} onOpenChange={setIsEditLessonOpen}>
-        <DialogContent className="sm:max-w-[700px]">
-          <DialogHeader>
-            <DialogTitle>Edit Lesson</DialogTitle>
-            <DialogDescription>
-              Update this lesson's details.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <Tabs defaultValue="details">
-            <TabsList className="mb-4">
-              <TabsTrigger value="details">Lesson Details</TabsTrigger>
-              <TabsTrigger value="video">Add Video</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="details">
-              <form onSubmit={handleEditLesson} className="space-y-4 mt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-title">Lesson Title</Label>
-                  <Input
-                    id="edit-title"
-                    placeholder="Enter lesson title"
-                    value={lessonForm.title}
-                    onChange={(e) => setLessonForm({ ...lessonForm, title: e.target.value })}
-                  />
-                </div>
+
+            <Dialog open={editLessonOpen} onOpenChange={setEditLessonOpen}>
+              <DialogContent className="sm:max-w-[525px]">
+                <DialogHeader>
+                  <DialogTitle>Edit Lesson</DialogTitle>
+                  <DialogDescription>
+                    Edit the details of the selected lesson.
+                  </DialogDescription>
+                </DialogHeader>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="edit-content">Content</Label>
-                  <Textarea
-                    id="edit-content"
-                    placeholder="Enter lesson content"
-                    value={lessonForm.content}
-                    onChange={(e) => setLessonForm({ ...lessonForm, content: e.target.value })}
-                    rows={5}
-                  />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <form onSubmit={handleEditLesson} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-title">Lesson Title</Label>
+                    <Input
+                      id="edit-title"
+                      placeholder="Enter lesson title"
+                      value={selectedLesson?.title || ''}
+                      onChange={(e) => setSelectedLesson({ ...selectedLesson, title: e.target.value } as Lesson)}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-content">Content</Label>
+                    <Textarea
+                      id="edit-content"
+                      placeholder="Enter lesson content"
+                      value={selectedLesson?.content || ''}
+                      onChange={(e) => setSelectedLesson({ ...selectedLesson, content: e.target.value } as Lesson)}
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-video_url">Video URL (Optional)</Label>
+                    <Input
+                      id="edit-video_url"
+                      placeholder="Enter YouTube video URL"
+                      value={selectedLesson?.video_url || ''}
+                      onChange={(e) => setSelectedLesson({ ...selectedLesson, video_url: e.target.value } as Lesson)}
+                    />
+                  </div>
+                  
                   <div className="space-y-2">
                     <Label htmlFor="edit-duration">Duration (minutes)</Label>
                     <Input
                       id="edit-duration"
                       type="number"
-                      min="1"
-                      placeholder="Enter duration in minutes"
-                      value={lessonForm.duration}
-                      onChange={(e) => setLessonForm({ ...lessonForm, duration: e.target.value })}
+                      placeholder="Enter lesson duration in minutes"
+                      value={String(selectedLesson?.duration || '')}
+                      onChange={(e) => setSelectedLesson({ ...selectedLesson, duration: parseInt(e.target.value) } as Lesson)}
                     />
                   </div>
                   
-                  <div className="space-y-2">
-                    <Label htmlFor="edit-video-url">Video URL (optional)</Label>
-                    <Input
-                      id="edit-video-url"
-                      placeholder="Enter YouTube or video URL"
-                      value={lessonForm.video_url}
-                      onChange={(e) => setLessonForm({ ...lessonForm, video_url: e.target.value })}
-                    />
-                  </div>
-                </div>
-                
-                <DialogFooter>
-                  <Button
-                    type="submit"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? 'Updating...' : 'Update Lesson'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </TabsContent>
+                  <DialogFooter>
+                    <Button
+                      type="submit"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? 'Updating...' : 'Update Lesson'}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
             
-            <TabsContent value="video">
-              <div className="space-y-4">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Search for YouTube videos"
-                    value={videoSearchQuery}
-                    onChange={(e) => setVideoSearchQuery(e.target.value)}
-                    className="flex-grow"
-                  />
-                  <Button 
-                    onClick={searchVideos}
-                    disabled={isSearchingVideos}
-                  >
-                    {isSearchingVideos ? 'Searching...' : 'Search'}
-                  </Button>
-                </div>
-                
-                {lessonForm.video_url && (
-                  <div className="p-3 border rounded-md bg-muted/30">
-                    <p className="font-medium text-sm mb-1">Selected Video</p>
-                    <p className="text-xs text-muted-foreground break-all">{lessonForm.video_url}</p>
-                  </div>
-                )}
-                
-                {videoSearchResults.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto p-1">
-                    {videoSearchResults.map((video) => (
-                      <Card key={video.id.videoId} className="overflow-hidden hover:shadow-md transition-shadow">
-                        <img
-                          src={video.snippet.thumbnails.medium.url}
-                          alt={video.snippet.title}
-                          className="w-full h-32 object-cover"
-                        />
-                        <CardContent className="p-3">
-                          <p className="font-medium text-sm line-clamp-2">{video.snippet.title}</p>
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{video.snippet.channelTitle}</p>
-                        </CardContent>
-                        <CardFooter className="p-3 pt-0">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="w-full"
-                            onClick={() => selectVideo(video)}
-                          >
-                            <Video className="h-3 w-3 mr-1" />
-                            Select Video
-                          </Button>
-                        </CardFooter>
-                      </Card>
+            {lessons.length === 0 ? (
+              <p>No lessons found. Add a lesson to get started.</p>
+            ) : (
+              <DndProvider backend={HTML5Backend}>
+                <Table>
+                  <TableCaption>A list of your lessons.</TableCaption>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Duration</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {lessons.map((lesson) => (
+                      <DraggableRow key={lesson.id} lesson={lesson} />
                     ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 bg-muted/30 rounded-lg">
-                    {isSearchingVideos ? (
-                      <div className="flex flex-col items-center">
-                        <div className="h-6 w-6 animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
-                        <p className="text-muted-foreground mt-2">Searching for videos...</p>
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground">Search for YouTube videos to add to this lesson</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
-      
+                  </TableBody>
+                </Table>
+              </DndProvider>
+            )}
+          </div>
+        </section>
+      </main>
       <Footer />
     </div>
   );

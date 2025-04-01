@@ -1,30 +1,32 @@
 
-import CourseCard from './CourseCard';
+// If this is a read-only file, we should create a fixed version
+// Create a wrapper component that adapts props:
 
-export interface Course {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  level: string;
-  duration: string;
-  students: number;
-  lessons: number;
-  image?: string;
-}
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
-interface CourseGridProps {
-  courses: Course[];
-}
+// Original CourseGrid might have a 'loading' prop, but we're using 'isLoading'
+// We create a wrapper that maps props correctly
+export type CourseGridWrapperProps = {
+  courses: any[];
+  isLoading: boolean;
+  emptyMessage: string;
+};
 
-const CourseGrid = ({ courses }: CourseGridProps) => {
+const CourseGridWrapper: React.FC<CourseGridWrapperProps> = ({ 
+  courses, 
+  isLoading, 
+  emptyMessage 
+}) => {
+  // Import the original CourseGrid and pass props with the correct names
+  // If CourseGrid is expecting 'loading', pass isLoading as loading
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-      {courses.map((course) => (
-        <CourseCard key={course.id} {...course} />
-      ))}
-    </div>
+    <CourseGrid 
+      courses={courses}
+      loading={isLoading} 
+      emptyMessage={emptyMessage}
+    />
   );
 };
 
-export default CourseGrid;
+export default CourseGridWrapper;
