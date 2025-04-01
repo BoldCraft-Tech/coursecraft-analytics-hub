@@ -1,397 +1,443 @@
 
-import { useParams, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Progress } from '@/components/ui/progress';
-import { Clock, Users, BookOpen, Award, CheckCircle, ChevronLeft, Play } from 'lucide-react';
+import { BookOpen, Users, Clock, GraduationCap, Award } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import EnrollButton from '@/components/course-detail/EnrollButton';
+import CourseProgress from '@/components/course-detail/CourseProgress';
+import LessonList from '@/components/course-detail/LessonList';
+
+interface Course {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  level: string;
+  duration: string;
+  students: number;
+  lessons: number;
+  image?: string;
+}
+
+interface Lesson {
+  id: string;
+  title: string;
+  content: string;
+  duration: number;
+  order_index: number;
+  completed?: boolean;
+}
+
+interface Enrollment {
+  id: string;
+  progress: number;
+  completed: boolean;
+}
 
 const CourseDetail = () => {
   const { id } = useParams<{ id: string }>();
+  const [course, setCourse] = useState<Course | null>(null);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
+  const [completedLessons, setCompletedLessons] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+  const [loadingCertificate, setLoadingCertificate] = useState(false);
+  const [certificateId, setCertificateId] = useState<string | null>(null);
   
-  // Mock course data - in a real app, you would fetch this based on the ID
-  const course = {
-    id: id || '1',
-    title: 'Sustainable Farming Techniques',
-    description: 'Learn modern and sustainable methods to improve crop yields while protecting the environment. This comprehensive course covers soil health, water management, integrated pest management, and much more.',
-    category: 'Agriculture',
-    level: 'Beginner',
-    duration: '6 weeks',
-    students: 1250,
-    lessons: 24,
-    instructor: 'Dr. Sarah Johnson',
-    instructorRole: 'Agricultural Scientist',
-    rating: 4.8,
-    reviews: 142,
-    lastUpdated: 'March 2023',
-    language: 'English',
-    progress: 35,
-    modules: [
-      {
-        id: 'm1',
-        title: 'Introduction to Sustainable Farming',
-        description: 'Understand the fundamentals of sustainable agriculture.',
-        lessons: [
-          { id: 'l1', title: 'What is Sustainable Farming?', duration: '15 min', completed: true },
-          { id: 'l2', title: 'The History and Evolution of Agricultural Practices', duration: '22 min', completed: true },
-          { id: 'l3', title: 'Key Principles of Sustainability in Agriculture', duration: '18 min', completed: false },
-        ]
-      },
-      {
-        id: 'm2',
-        title: 'Soil Health and Management',
-        description: 'Learn how to maintain and improve soil quality naturally.',
-        lessons: [
-          { id: 'l4', title: 'Understanding Soil Composition', duration: '24 min', completed: false },
-          { id: 'l5', title: 'Natural Methods for Improving Soil Fertility', duration: '19 min', completed: false },
-          { id: 'l6', title: 'Preventing Soil Erosion', duration: '17 min', completed: false },
-          { id: 'l7', title: 'Composting Techniques', duration: '25 min', completed: false },
-        ]
-      },
-      {
-        id: 'm3',
-        title: 'Water Conservation',
-        description: 'Efficient water usage techniques for farming.',
-        lessons: [
-          { id: 'l8', title: 'Water Needs Assessment', duration: '16 min', completed: false },
-          { id: 'l9', title: 'Drip Irrigation Systems', duration: '28 min', completed: false },
-          { id: 'l10', title: 'Rainwater Harvesting', duration: '23 min', completed: false },
-        ]
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!id) return;
+
+    const fetchCourseDetails = async () => {
+      setLoading(true);
+      try {
+        // Fetch course data
+        const { data: courseData, error: courseError } = await supabase
+          .from('courses')
+          .select('*')
+          .eq('id', id)
+          .single();
+          
+        if (courseError) throw courseError;
+        
+        setCourse(courseData);
+        
+        // Fetch lessons
+        const { data: lessonsData, error: lessonsError } = await supabase
+          .from('lessons')
+          .select('*')
+          .eq('course_id', id)
+          .order('order_index', { ascending: true });
+          
+        if (lessonsError) throw lessonsError;
+        
+        // If user is logged in, fetch enrollment and lesson progress
+        if (user) {
+          // Fetch enrollment status
+          const { data: enrollmentData, error: enrollmentError } = await supabase
+            .from('enrollments')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('course_id', id)
+            .maybeSingle();
+            
+          if (enrollmentError) throw enrollmentError;
+          
+          setEnrollment(enrollmentData);
+          
+          // Fetch lesson progress
+          const { data: progressData, error: progressError } = await supabase
+            .from('user_lesson_progress')
+            .select('lesson_id, completed')
+            .eq('user_id', user.id);
+            
+          if (progressError) throw progressError;
+          
+          // Create a map of lesson IDs to completion status
+          const completionMap = progressData.reduce((map: Record<string, boolean>, item) => {
+            map[item.lesson_id] = item.completed;
+            return map;
+          }, {});
+          
+          // Add completion status to lessons
+          const lessonsWithProgress = lessonsData.map(lesson => ({
+            ...lesson,
+            completed: completionMap[lesson.id] || false
+          }));
+          
+          setLessons(lessonsWithProgress);
+          
+          // Count completed lessons
+          const completed = progressData.filter(p => p.completed).length;
+          setCompletedLessons(completed);
+          
+          // Check if user has a certificate for this course
+          const { data: certificateData, error: certificateError } = await supabase
+            .from('certificates')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('course_id', id)
+            .maybeSingle();
+            
+          if (certificateError) throw certificateError;
+          
+          if (certificateData) {
+            setCertificateId(certificateData.id);
+          }
+        } else {
+          setLessons(lessonsData);
+        }
+      } catch (error: any) {
+        console.error('Error fetching course details:', error);
+        toast({
+          title: 'Error loading course',
+          description: error.message || 'Please try again later',
+          variant: 'destructive',
+        });
+      } finally {
+        setLoading(false);
       }
-    ]
+    };
+
+    fetchCourseDetails();
+  }, [id, user, toast]);
+
+  const handleEnrollmentChange = (enrolled: boolean) => {
+    if (enrolled && !enrollment) {
+      // User just enrolled
+      setEnrollment({
+        id: 'new-enrollment', // temporary id
+        progress: 0,
+        completed: false
+      });
+    } else if (!enrolled && enrollment) {
+      // User just unenrolled
+      setEnrollment(null);
+      setCompletedLessons(0);
+      
+      // Reset lesson completion status
+      setLessons(prev => prev.map(lesson => ({
+        ...lesson,
+        completed: false
+      })));
+    }
   };
-  
+
+  const handleLessonComplete = (lessonId: string, completed: boolean) => {
+    // Update lessons state
+    setLessons(prev => prev.map(lesson => 
+      lesson.id === lessonId 
+        ? { ...lesson, completed } 
+        : lesson
+    ));
+    
+    // Count completed lessons
+    const newCompletedCount = completed 
+      ? completedLessons + 1 
+      : completedLessons - 1;
+    
+    setCompletedLessons(newCompletedCount);
+    
+    // Calculate progress percentage
+    if (lessons.length > 0) {
+      const progressPercentage = Math.round((newCompletedCount / lessons.length) * 100);
+      
+      // Update enrollment progress
+      if (enrollment) {
+        // Update local state
+        setEnrollment(prev => prev ? {
+          ...prev,
+          progress: progressPercentage,
+          completed: progressPercentage === 100
+        } : null);
+        
+        // Update in database (don't await to avoid blocking UI)
+        supabase
+          .from('enrollments')
+          .update({ 
+            progress: progressPercentage,
+            completed: progressPercentage === 100
+          })
+          .eq('user_id', user?.id)
+          .eq('course_id', id);
+      }
+    }
+  };
+
+  const generateCertificate = async () => {
+    if (!user || !id) return;
+    
+    setLoadingCertificate(true);
+    
+    try {
+      const { data, error } = await supabase.rpc(
+        'generate_certificate',
+        { course_id: id }
+      );
+      
+      if (error) throw error;
+      
+      if (data) {
+        setCertificateId(data);
+        toast({
+          title: 'Certificate generated!',
+          description: 'Congratulations on completing this course',
+        });
+      } else {
+        toast({
+          title: 'Cannot generate certificate',
+          description: 'Please complete all lessons first',
+          variant: 'destructive',
+        });
+      }
+    } catch (error: any) {
+      console.error('Error generating certificate:', error);
+      toast({
+        title: 'Error generating certificate',
+        description: error.message || 'Please try again later',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingCertificate(false);
+    }
+  };
+
+  const getProgressPercentage = () => {
+    if (!lessons.length) return 0;
+    return Math.round((completedLessons / lessons.length) * 100);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
+        <main className="flex-grow pt-20 flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent" role="status">
+              <span className="sr-only">Loading...</span>
+            </div>
+            <p className="mt-4 text-muted-foreground">Loading course details...</p>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!course) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
+        <main className="flex-grow pt-20 flex items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold mb-2">Course not found</h2>
+            <p className="text-muted-foreground mb-6">The course you're looking for doesn't exist or has been removed</p>
+            <Button onClick={() => navigate('/courses')}>Browse Courses</Button>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <main className="flex-grow pt-20">
-        {/* Course Header */}
-        <div className="bg-secondary/40">
-          <div className="container px-4 mx-auto py-12">
-            <div className="max-w-4xl">
-              <Link to="/courses" className="inline-flex items-center text-muted-foreground hover:text-foreground mb-4 transition-colors">
-                <ChevronLeft className="mr-1 h-4 w-4" />
-                Back to Courses
-              </Link>
-              <h1 className="mb-4">{course.title}</h1>
-              <p className="text-xl text-muted-foreground mb-6">{course.description}</p>
-              
-              <div className="flex flex-wrap gap-6 mb-6">
-                <div className="flex items-center text-muted-foreground">
-                  <Clock className="mr-1.5 h-5 w-5" />
-                  {course.duration}
-                </div>
-                <div className="flex items-center text-muted-foreground">
-                  <Users className="mr-1.5 h-5 w-5" />
-                  {course.students.toLocaleString()} students
-                </div>
-                <div className="flex items-center text-muted-foreground">
-                  <BookOpen className="mr-1.5 h-5 w-5" />
-                  {course.lessons} lessons
-                </div>
-                <div className="flex items-center text-muted-foreground">
-                  <Award className="mr-1.5 h-5 w-5" />
-                  Certificate
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Button size="lg" className="button-animation">
-                  Start Learning
-                </Button>
-                <Button variant="outline" size="lg" className="button-animation">
-                  Add to Wishlist
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Course Content */}
-        <div className="container px-4 mx-auto py-12">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Main Content */}
-            <div className="lg:col-span-2">
-              <Tabs defaultValue="curriculum">
-                <TabsList className="grid w-full grid-cols-3 mb-8">
-                  <TabsTrigger value="curriculum">Curriculum</TabsTrigger>
-                  <TabsTrigger value="overview">Overview</TabsTrigger>
-                  <TabsTrigger value="reviews">Reviews</TabsTrigger>
-                </TabsList>
+        <section className="py-16">
+          <div className="container px-4 mx-auto">
+            <div className="max-w-4xl mx-auto">
+              <div className="mb-8">
+                <h1 className="text-3xl font-bold mb-4">{course.title}</h1>
+                <p className="text-lg text-muted-foreground mb-6">{course.description}</p>
                 
-                <TabsContent value="curriculum" className="space-y-6">
-                  <h2 className="text-2xl font-medium mb-4">Course Curriculum</h2>
+                <div className="flex flex-wrap gap-4 mb-6">
+                  <div className="flex items-center">
+                    <GraduationCap className="h-5 w-5 mr-2 text-muted-foreground" />
+                    <span>{course.level}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <Clock className="h-5 w-5 mr-2 text-muted-foreground" />
+                    <span>{course.duration}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <BookOpen className="h-5 w-5 mr-2 text-muted-foreground" />
+                    <span>{course.lessons} lessons</span>
+                  </div>
+                  <div className="flex items-center">
+                    <Users className="h-5 w-5 mr-2 text-muted-foreground" />
+                    <span>{course.students} students</span>
+                  </div>
+                </div>
+                
+                <div className="flex flex-wrap gap-2 mb-6">
+                  <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm">
+                    {course.category}
+                  </span>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="w-full sm:w-auto">
+                    <EnrollButton 
+                      courseId={course.id} 
+                      isEnrolled={!!enrollment}
+                      onEnrollmentChange={handleEnrollmentChange} 
+                    />
+                  </div>
                   
-                  <div className="space-y-4">
-                    {course.modules.map((module) => (
-                      <Accordion type="single" collapsible key={module.id}>
-                        <AccordionItem value={module.id} className="glass-panel border-none rounded-lg overflow-hidden">
-                          <AccordionTrigger className="px-4 py-3 hover:no-underline hover:bg-secondary/50">
-                            <div className="text-left">
-                              <h3 className="font-medium">{module.title}</h3>
-                              <p className="text-sm text-muted-foreground">{module.description}</p>
-                            </div>
-                          </AccordionTrigger>
-                          <AccordionContent className="px-4 pb-4 pt-0">
-                            <div className="space-y-2 mt-2">
-                              {module.lessons.map((lesson) => (
-                                <div key={lesson.id} className="flex items-center justify-between p-3 rounded-md hover:bg-secondary/50 transition-colors">
-                                  <div className="flex items-center">
-                                    {lesson.completed ? (
-                                      <CheckCircle className="h-5 w-5 text-primary mr-3 flex-shrink-0" />
-                                    ) : (
-                                      <Play className="h-5 w-5 text-muted-foreground mr-3 flex-shrink-0" />
-                                    )}
-                                    <span className={lesson.completed ? "line-through text-muted-foreground" : ""}>{lesson.title}</span>
-                                  </div>
-                                  <span className="text-sm text-muted-foreground">{lesson.duration}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </AccordionContent>
-                        </AccordionItem>
-                      </Accordion>
-                    ))}
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="overview">
-                  <div className="space-y-8">
+                  {certificateId && (
+                    <Button 
+                      variant="outline"
+                      onClick={() => navigate(`/certificates?course=${course.id}`)}
+                      className="w-full sm:w-auto"
+                    >
+                      <Award className="h-4 w-4 mr-2" />
+                      View Certificate
+                    </Button>
+                  )}
+                  
+                  {enrollment && enrollment.progress === 100 && !certificateId && (
+                    <Button 
+                      variant="outline"
+                      onClick={generateCertificate}
+                      disabled={loadingCertificate}
+                      className="w-full sm:w-auto"
+                    >
+                      {loadingCertificate ? (
+                        <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
+                      ) : (
+                        <Award className="h-4 w-4 mr-2" />
+                      )}
+                      Get Certificate
+                    </Button>
+                  )}
+                </div>
+              </div>
+              
+              {enrollment && (
+                <div className="mb-8">
+                  <CourseProgress 
+                    progress={getProgressPercentage()}
+                    totalLessons={lessons.length}
+                    completedLessons={completedLessons}
+                  />
+                </div>
+              )}
+              
+              <div className="glass-panel p-6 rounded-xl mb-8">
+                <Tabs defaultValue="curriculum">
+                  <TabsList className="mb-6">
+                    <TabsTrigger value="curriculum">Curriculum</TabsTrigger>
+                    <TabsTrigger value="about">About</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="curriculum" className="space-y-6">
                     <div>
-                      <h2 className="text-2xl font-medium mb-4">About This Course</h2>
-                      <p className="text-muted-foreground">
-                        This comprehensive course teaches you everything you need to know about sustainable farming practices that can be applied in rural settings. From soil management to water conservation, you'll learn practical techniques that improve yields while protecting the environment.
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-xl font-medium mb-3">What You'll Learn</h3>
-                      <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <li className="flex items-start">
-                          <CheckCircle className="h-5 w-5 text-primary mr-2 mt-0.5" />
-                          <span>Implement sustainable farming techniques</span>
-                        </li>
-                        <li className="flex items-start">
-                          <CheckCircle className="h-5 w-5 text-primary mr-2 mt-0.5" />
-                          <span>Improve soil health naturally</span>
-                        </li>
-                        <li className="flex items-start">
-                          <CheckCircle className="h-5 w-5 text-primary mr-2 mt-0.5" />
-                          <span>Conserve water through efficient irrigation</span>
-                        </li>
-                        <li className="flex items-start">
-                          <CheckCircle className="h-5 w-5 text-primary mr-2 mt-0.5" />
-                          <span>Apply integrated pest management</span>
-                        </li>
-                        <li className="flex items-start">
-                          <CheckCircle className="h-5 w-5 text-primary mr-2 mt-0.5" />
-                          <span>Plan crop rotations for optimal yield</span>
-                        </li>
-                        <li className="flex items-start">
-                          <CheckCircle className="h-5 w-5 text-primary mr-2 mt-0.5" />
-                          <span>Create sustainable business models</span>
-                        </li>
-                      </ul>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-xl font-medium mb-3">Prerequisites</h3>
-                      <p className="text-muted-foreground">
-                        This course is designed for beginners. No prior farming experience is required, though basic knowledge of agriculture will be helpful.
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <h3 className="text-xl font-medium mb-3">Target Audience</h3>
-                      <ul className="space-y-2">
-                        <li className="flex items-start">
-                          <CheckCircle className="h-5 w-5 text-primary mr-2 mt-0.5" />
-                          <span>Small-scale farmers looking to improve productivity</span>
-                        </li>
-                        <li className="flex items-start">
-                          <CheckCircle className="h-5 w-5 text-primary mr-2 mt-0.5" />
-                          <span>Agriculture students interested in sustainable practices</span>
-                        </li>
-                        <li className="flex items-start">
-                          <CheckCircle className="h-5 w-5 text-primary mr-2 mt-0.5" />
-                          <span>Community leaders involved in agricultural planning</span>
-                        </li>
-                        <li className="flex items-start">
-                          <CheckCircle className="h-5 w-5 text-primary mr-2 mt-0.5" />
-                          <span>Anyone interested in starting sustainable farming ventures</span>
-                        </li>
-                      </ul>
-                    </div>
-                  </div>
-                </TabsContent>
-                
-                <TabsContent value="reviews">
-                  <div className="space-y-8">
-                    <h2 className="text-2xl font-medium mb-4">Student Reviews</h2>
-                    
-                    <div className="glass-panel rounded-xl p-6">
-                      <div className="flex flex-col md:flex-row gap-6">
-                        <div className="text-center md:border-r md:border-border md:pr-6">
-                          <div className="text-5xl font-medium">{course.rating}</div>
-                          <div className="flex items-center justify-center my-2">
-                            {Array(5).fill(0).map((_, i) => (
-                              <svg key={i} className={`w-5 h-5 ${i < Math.floor(course.rating) ? 'text-yellow-400' : 'text-gray-300'}`} fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                              </svg>
-                            ))}
-                          </div>
-                          <div className="text-sm text-muted-foreground">Based on {course.reviews} reviews</div>
+                      <h2 className="text-xl font-semibold mb-4">Course Curriculum</h2>
+                      
+                      <div className="mb-4">
+                        <div className="flex justify-between text-sm text-muted-foreground mb-2">
+                          <span>{course.lessons} lessons</span>
+                          <span>{course.duration} total</span>
                         </div>
-                        
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center">
-                            <span className="text-sm w-10 mr-2">5 stars</span>
-                            <Progress value={75} className="h-2 flex-1" />
-                            <span className="text-sm w-10 ml-2 text-right">75%</span>
-                          </div>
-                          <div className="flex items-center">
-                            <span className="text-sm w-10 mr-2">4 stars</span>
-                            <Progress value={20} className="h-2 flex-1" />
-                            <span className="text-sm w-10 ml-2 text-right">20%</span>
-                          </div>
-                          <div className="flex items-center">
-                            <span className="text-sm w-10 mr-2">3 stars</span>
-                            <Progress value={5} className="h-2 flex-1" />
-                            <span className="text-sm w-10 ml-2 text-right">5%</span>
-                          </div>
-                          <div className="flex items-center">
-                            <span className="text-sm w-10 mr-2">2 stars</span>
-                            <Progress value={0} className="h-2 flex-1" />
-                            <span className="text-sm w-10 ml-2 text-right">0%</span>
-                          </div>
-                          <div className="flex items-center">
-                            <span className="text-sm w-10 mr-2">1 star</span>
-                            <Progress value={0} className="h-2 flex-1" />
-                            <span className="text-sm w-10 ml-2 text-right">0%</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-6">
-                      {/* Sample Reviews */}
-                      <div className="glass-panel rounded-xl p-6">
-                        <div className="flex justify-between mb-4">
-                          <div className="flex items-center">
-                            <div className="w-10 h-10 rounded-full bg-primary/10 mr-3"></div>
-                            <div>
-                              <h4 className="font-medium">Michael T.</h4>
-                              <div className="text-sm text-muted-foreground">Small Farm Owner</div>
-                            </div>
-                          </div>
-                          <div className="flex items-center">
-                            {Array(5).fill(0).map((_, i) => (
-                              <svg key={i} className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                              </svg>
-                            ))}
-                          </div>
-                        </div>
-                        <p className="text-muted-foreground">
-                          This course transformed how I approach farming. The techniques I learned have already improved my crop yields while reducing my water usage. Dr. Johnson explains complex concepts in a way that's easy to understand and apply.
-                        </p>
                       </div>
                       
-                      <div className="glass-panel rounded-xl p-6">
-                        <div className="flex justify-between mb-4">
-                          <div className="flex items-center">
-                            <div className="w-10 h-10 rounded-full bg-primary/10 mr-3"></div>
-                            <div>
-                              <h4 className="font-medium">Lisa R.</h4>
-                              <div className="text-sm text-muted-foreground">Agricultural Student</div>
-                            </div>
-                          </div>
-                          <div className="flex items-center">
-                            {Array(5).fill(0).map((_, i) => (
-                              <svg key={i} className={`w-4 h-4 ${i < 4 ? 'text-yellow-400' : 'text-gray-300'}`} fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path>
-                              </svg>
-                            ))}
-                          </div>
+                      {lessons.length > 0 ? (
+                        <LessonList 
+                          courseId={course.id}
+                          lessons={lessons} 
+                          isEnrolled={!!enrollment}
+                          onLessonComplete={handleLessonComplete}
+                        />
+                      ) : (
+                        <div className="text-center py-8 bg-muted/30 rounded-lg">
+                          <p className="text-muted-foreground">No lessons available for this course yet</p>
                         </div>
-                        <p className="text-muted-foreground">
-                          Excellent content with practical examples. I especially appreciated the module on soil health and composting. Would have loved more case studies from different climates, but overall a very valuable course.
-                        </p>
+                      )}
+                    </div>
+                  </TabsContent>
+                  
+                  <TabsContent value="about">
+                    <div className="space-y-6">
+                      <div>
+                        <h2 className="text-xl font-semibold mb-4">About This Course</h2>
+                        <p className="text-muted-foreground">{course.description}</p>
+                      </div>
+                      
+                      <div>
+                        <h3 className="text-lg font-semibold mb-3">What You'll Learn</h3>
+                        <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
+                          <li>Practical knowledge applicable to rural settings</li>
+                          <li>Hands-on skills you can apply immediately</li>
+                          <li>Best practices specific to your field</li>
+                          <li>Solutions to common challenges in rural areas</li>
+                        </ul>
+                      </div>
+                      
+                      <div>
+                        <h3 className="text-lg font-semibold mb-3">Requirements</h3>
+                        <ul className="list-disc pl-5 space-y-2 text-muted-foreground">
+                          <li>Basic understanding of the subject area</li>
+                          <li>Willingness to learn and apply new concepts</li>
+                          <li>Access to basic tools relevant to the course</li>
+                        </ul>
                       </div>
                     </div>
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
-            
-            {/* Sidebar */}
-            <div className="lg:col-span-1">
-              <div className="sticky top-24 space-y-6">
-                {/* Instructor Info */}
-                <div className="glass-panel rounded-xl p-6">
-                  <h3 className="text-xl font-medium mb-4">Your Instructor</h3>
-                  <div className="flex items-center mb-4">
-                    <div className="w-12 h-12 rounded-full bg-primary/10 mr-3"></div>
-                    <div>
-                      <h4 className="font-medium">{course.instructor}</h4>
-                      <div className="text-sm text-muted-foreground">{course.instructorRole}</div>
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Dr. Johnson has over 15 years of experience in sustainable agriculture research and implementation in rural communities across the globe.
-                  </p>
-                  <Button variant="outline" className="w-full">View Profile</Button>
-                </div>
-                
-                {/* Course Info */}
-                <div className="glass-panel rounded-xl p-6">
-                  <h3 className="text-xl font-medium mb-4">Course Details</h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center py-2 border-b border-border">
-                      <span className="text-muted-foreground">Last Updated</span>
-                      <span className="font-medium">{course.lastUpdated}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-b border-border">
-                      <span className="text-muted-foreground">Language</span>
-                      <span className="font-medium">{course.language}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-b border-border">
-                      <span className="text-muted-foreground">Level</span>
-                      <span className="font-medium">{course.level}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-b border-border">
-                      <span className="text-muted-foreground">Duration</span>
-                      <span className="font-medium">{course.duration}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2">
-                      <span className="text-muted-foreground">Certificate</span>
-                      <span className="font-medium">Yes, on completion</span>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Progress */}
-                <div className="glass-panel rounded-xl p-6">
-                  <h3 className="text-xl font-medium mb-4">Your Progress</h3>
-                  <div className="mb-2 flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">
-                      {course.progress}% Complete
-                    </span>
-                    <span className="text-sm text-primary font-medium">
-                      {Math.round(course.progress * course.lessons / 100)}/{course.lessons} Lessons
-                    </span>
-                  </div>
-                  <Progress value={course.progress} className="h-2 mb-6" />
-                  <Button className="w-full button-animation">
-                    {course.progress > 0 ? 'Continue Learning' : 'Start Learning'}
-                  </Button>
-                </div>
+                  </TabsContent>
+                </Tabs>
               </div>
             </div>
           </div>
-        </div>
+        </section>
       </main>
       <Footer />
     </div>
