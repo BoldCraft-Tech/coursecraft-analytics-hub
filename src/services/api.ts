@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -203,13 +202,21 @@ async function updateCourseProgress(lessonId: string, userId: string) {
       
     if (countError) throw countError;
     
+    // Get lesson IDs for this course
+    const { data: lessonIds, error: lessonIdsError } = await supabase
+      .from('lessons')
+      .select('id')
+      .eq('course_id', lesson.course_id);
+      
+    if (lessonIdsError) throw lessonIdsError;
+    
     // Count completed lessons by user
     const { count: completedLessons, error: completedError } = await supabase
       .from('user_lesson_progress')
       .select('lesson_id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('completed', true)
-      .in('lesson_id', supabase.from('lessons').select('id').eq('course_id', lesson.course_id));
+      .in('lesson_id', lessonIds.map(l => l.id));
       
     if (completedError) throw completedError;
     
