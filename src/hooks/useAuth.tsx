@@ -80,8 +80,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             name,
           },
           emailRedirectTo: window.location.origin,
-          // Disable email confirmation
-          shouldCreateUser: true,
+          // Disable email confirmation by not setting a flag 
+          // (will use Supabase default behavior)
         },
       });
 

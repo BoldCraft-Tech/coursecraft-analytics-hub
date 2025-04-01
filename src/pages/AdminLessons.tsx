@@ -53,13 +53,33 @@ const defaultValues: LessonFormValues = {
   video_url: ""
 };
 
+// Define interfaces for proper typing
+interface Lesson {
+  id: string;
+  title: string;
+  content: string;
+  duration: number;
+  order_index: number;
+  course_id: string;
+  created_at: string;
+  updated_at: string;
+  video_url?: string;
+}
+
+interface Course {
+  id: string;
+  title: string;
+  category: string;
+  lessons: number;
+}
+
 const AdminLessons = () => {
   const { courseId } = useParams<{ courseId: string }>();
-  const [course, setCourse] = useState<any | null>(null);
-  const [lessons, setLessons] = useState<any[]>([]);
+  const [course, setCourse] = useState<Course | null>(null);
+  const [lessons, setLessons] = useState<Lesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [selectedLesson, setSelectedLesson] = useState<any | null>(null);
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
 
   const { user } = useAuth();
@@ -129,13 +149,18 @@ const AdminLessons = () => {
 
   // Handle lesson submit (create or update)
   const onSubmit = async (values: LessonFormValues) => {
+    if (!courseId) return;
+    
     try {
       if (isEditing && selectedLesson) {
         // Update existing lesson
         const { error } = await supabase
           .from('lessons')
           .update({
-            ...values,
+            title: values.title,
+            content: values.content,
+            duration: values.duration,
+            video_url: values.video_url || null,
             updated_at: new Date().toISOString()
           })
           .eq('id', selectedLesson.id);
@@ -155,13 +180,16 @@ const AdminLessons = () => {
         // Create new lesson
         const { data, error } = await supabase
           .from('lessons')
-          .insert([{
-            ...values,
+          .insert({
+            title: values.title,
+            content: values.content,
+            duration: values.duration,
+            video_url: values.video_url || null,
             course_id: courseId,
             order_index: nextOrderIndex,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
-          }])
+          })
           .select();
 
         if (error) throw error;
@@ -196,7 +224,7 @@ const AdminLessons = () => {
   };
 
   // Handle lesson edit
-  const handleEditLesson = (lesson: any) => {
+  const handleEditLesson = (lesson: Lesson) => {
     setSelectedLesson(lesson);
     setIsEditing(true);
     resetForm(lesson);
@@ -221,7 +249,7 @@ const AdminLessons = () => {
       await supabase
         .from('courses')
         .update({ 
-          lessons: Math.max(0, (course.lessons || lessons.length) - 1),
+          lessons: Math.max(0, (course?.lessons || lessons.length) - 1),
           updated_at: new Date().toISOString()
         })
         .eq('id', courseId);

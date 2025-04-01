@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
@@ -409,6 +410,7 @@ const CourseDetail = () => {
                   </TabsContent>
                   
                   <TabsContent value="about">
+                    {/* About tab content */}
                     <div className="space-y-6">
                       <div>
                         <h2 className="text-xl font-semibold mb-4">About This Course</h2>

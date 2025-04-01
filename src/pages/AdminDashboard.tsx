@@ -1,92 +1,70 @@
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Navbar from '@/components/layout/Navbar';
-import Footer from '@/components/layout/Footer';
-import { 
-  Pencil, Trash2, Plus, BookOpen, Video, Save, X, Search,
-  BarChart4, Users, FileText, Graduation
-} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from "@/components/ui/dialog";
+import { 
+  ArrowRight, 
+  Pencil, 
+  Trash2, 
+  Plus, 
+  BookOpen,
+  GraduationCap,
+  Users
+} from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
-// Form validation schema
-const courseSchema = z.object({
-  title: z.string().min(5, { message: "Title must be at least 5 characters long" }),
-  description: z.string().min(20, { message: "Description must be at least 20 characters long" }),
-  category: z.string().min(1, { message: "Category is required" }),
-  level: z.string().min(1, { message: "Level is required" }),
-  duration: z.string().min(1, { message: "Duration is required" }),
-  image: z.string().optional(),
-});
-
-// Form schema type
-type CourseFormValues = z.infer<typeof courseSchema>;
-
-// Initial form values
-const defaultValues: CourseFormValues = {
-  title: "",
-  description: "",
-  category: "",
-  level: "Beginner",
-  duration: "",
-  image: "",
-};
+// Define proper course type
+interface Course {
+  id: string;
+  title: string;
+  description: string;
+  image?: string;
+  level: string;
+  category: string;
+  duration: string;
+  lessons: number;
+  students: number;
+  created_at?: string;
+  updated_at?: string;
+}
 
 const AdminDashboard = () => {
-  const [courses, setCourses] = useState<any[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [isEditing, setIsEditing] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState<any | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
-  const [isAddingLesson, setIsAddingLesson] = useState(false);
-  const [activeTab, setActiveTab] = useState("courses");
-
+  const [isEditing, setIsEditing] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  
+  // Form state
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [image, setImage] = useState('');
+  const [level, setLevel] = useState('Beginner');
+  const [category, setCategory] = useState('Agriculture');
+  const [duration, setDuration] = useState('2 hours');
+  
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Form setup
-  const form = useForm<CourseFormValues>({
-    resolver: zodResolver(courseSchema),
-    defaultValues,
-  });
-
-  // Reset form with course data or empty values
-  const resetForm = (courseData?: any) => {
-    if (courseData) {
-      form.reset({
-        title: courseData.title || "",
-        description: courseData.description || "",
-        category: courseData.category || "",
-        level: courseData.level || "Beginner",
-        duration: courseData.duration || "",
-        image: courseData.image || "",
-      });
-    } else {
-      form.reset(defaultValues);
-    }
-  };
-
   useEffect(() => {
-    // Fetch courses when component mounts
     fetchCourses();
   }, []);
 
-  // Fetch all courses
   const fetchCourses = async () => {
     setLoading(true);
     try {
@@ -94,8 +72,9 @@ const AdminDashboard = () => {
         .from('courses')
         .select('*')
         .order('created_at', { ascending: false });
-
+        
       if (error) throw error;
+      
       setCourses(data || []);
     } catch (error: any) {
       toast({
@@ -108,48 +87,94 @@ const AdminDashboard = () => {
     }
   };
 
-  // Handle course submit (create or update)
-  const onSubmit = async (values: CourseFormValues) => {
+  const resetForm = () => {
+    setTitle('');
+    setDescription('');
+    setImage('');
+    setLevel('Beginner');
+    setCategory('Agriculture');
+    setDuration('2 hours');
+    setIsEditing(false);
+    setSelectedCourse(null);
+  };
+
+  const handleOpenDialog = (course?: Course) => {
+    if (course) {
+      // Edit mode
+      setIsEditing(true);
+      setSelectedCourse(course);
+      setTitle(course.title);
+      setDescription(course.description);
+      setImage(course.image || '');
+      setLevel(course.level);
+      setCategory(course.category);
+      setDuration(course.duration);
+    } else {
+      // Create mode
+      resetForm();
+    }
+    setOpenDialog(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validation
+    if (!title || !description || !level || !category || !duration) {
+      toast({
+        title: 'Missing fields',
+        description: 'Please fill in all required fields',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     try {
+      const courseData: Partial<Course> = {
+        title,
+        description,
+        image: image || null,
+        level,
+        category,
+        duration,
+        updated_at: new Date().toISOString()
+      };
+      
       if (isEditing && selectedCourse) {
         // Update existing course
         const { error } = await supabase
           .from('courses')
-          .update({
-            ...values,
-            updated_at: new Date().toISOString()
-          })
+          .update(courseData)
           .eq('id', selectedCourse.id);
-
+          
         if (error) throw error;
-
+        
         toast({
           title: 'Course updated',
           description: 'The course has been updated successfully',
         });
       } else {
         // Create new course
-        const { data, error } = await supabase
+        const { error } = await supabase
           .from('courses')
           .insert([{
-            ...values,
+            ...courseData,
             students: 0,
             lessons: 0,
-          }])
-          .select();
-
+            created_at: new Date().toISOString()
+          }]);
+          
         if (error) throw error;
-
+        
         toast({
           title: 'Course created',
           description: 'The new course has been created successfully',
         });
       }
-
-      // Reset state and refetch courses
-      setIsEditing(false);
-      setSelectedCourse(null);
+      
+      // Reset and refresh
       setOpenDialog(false);
+      resetForm();
       fetchCourses();
     } catch (error: any) {
       toast({
@@ -160,33 +185,33 @@ const AdminDashboard = () => {
     }
   };
 
-  // Handle course edit
-  const handleEditCourse = (course: any) => {
-    setSelectedCourse(course);
-    setIsEditing(true);
-    resetForm(course);
-    setOpenDialog(true);
-  };
-
-  // Handle course delete
   const handleDeleteCourse = async (courseId: string) => {
     if (!confirm("Are you sure you want to delete this course? This action cannot be undone.")) {
       return;
     }
-
+    
     try {
-      const { error } = await supabase
+      // Delete all lessons first
+      const { error: lessonsError } = await supabase
+        .from('lessons')
+        .delete()
+        .eq('course_id', courseId);
+        
+      if (lessonsError) throw lessonsError;
+      
+      // Then delete the course
+      const { error: courseError } = await supabase
         .from('courses')
         .delete()
         .eq('id', courseId);
-
-      if (error) throw error;
-
+        
+      if (courseError) throw courseError;
+      
       toast({
         title: 'Course deleted',
-        description: 'The course has been deleted successfully',
+        description: 'The course and all its lessons have been deleted',
       });
-
+      
       fetchCourses();
     } catch (error: any) {
       toast({
@@ -197,233 +222,25 @@ const AdminDashboard = () => {
     }
   };
 
-  // Handle adding a video lesson
-  const handleAddVideoLesson = async (courseId: string) => {
-    navigate(`/admin/courses/${courseId}/lessons`);
-  };
-
-  // Filter courses based on search term
-  const filteredCourses = courses.filter(course =>
-    course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    course.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // Format statistics
-  const statistics = {
-    totalCourses: courses.length,
-    totalStudents: courses.reduce((acc, course) => acc + (course.students || 0), 0),
-    categories: new Set(courses.map(course => course.category)).size,
-  };
-
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar />
-      <main className="flex-grow pt-20 pb-10">
-        <div className="container px-4 mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">Admin Dashboard</h1>
-            <p className="text-muted-foreground">
-              Manage your courses, lessons, and monitor student progress
-            </p>
+      <main className="flex-grow p-6">
+        <div className="container mx-auto">
+          <div className="flex items-center justify-between mb-8">
+            <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+            <Button onClick={() => handleOpenDialog()}>
+              <Plus className="mr-2 h-4 w-4" /> Add New Course
+            </Button>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total Courses</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center">
-                  <BookOpen className="mr-2 h-4 w-4 text-muted-foreground" />
-                  <span className="text-2xl font-bold">{statistics.totalCourses}</span>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Total Students</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center">
-                  <Users className="mr-2 h-4 w-4 text-muted-foreground" />
-                  <span className="text-2xl font-bold">{statistics.totalStudents}</span>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Categories</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center">
-                  <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
-                  <span className="text-2xl font-bold">{statistics.categories}</span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
-            <TabsList className="mb-6">
-              <TabsTrigger value="courses">Courses</TabsTrigger>
-              <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="courses">
-              <div className="flex justify-between items-center mb-6">
-                <div className="relative w-full max-w-sm">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="search"
-                    placeholder="Search courses..."
-                    className="pl-8"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-                
-                <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-                  <DialogTrigger asChild>
-                    <Button 
-                      onClick={() => {
-                        setIsEditing(false);
-                        setSelectedCourse(null);
-                        resetForm();
-                      }}
-                    >
-                      <Plus className="mr-2 h-4 w-4" /> Add New Course
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[525px]">
-                    <DialogHeader>
-                      <DialogTitle>{isEditing ? 'Edit Course' : 'Add New Course'}</DialogTitle>
-                      <DialogDescription>
-                        {isEditing 
-                          ? 'Make changes to the course details below.'
-                          : 'Fill in the form below to create a new course.'}
-                      </DialogDescription>
-                    </DialogHeader>
-                    
-                    <Form {...form}>
-                      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                        <FormField
-                          control={form.control}
-                          name="title"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Course Title</FormLabel>
-                              <FormControl>
-                                <Input placeholder="e.g. Introduction to Agriculture" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <FormField
-                          control={form.control}
-                          name="description"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Description</FormLabel>
-                              <FormControl>
-                                <Textarea 
-                                  placeholder="Enter course description..." 
-                                  className="min-h-[100px]"
-                                  {...field} 
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="category"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Category</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="e.g. Agriculture" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          
-                          <FormField
-                            control={form.control}
-                            name="level"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Level</FormLabel>
-                                <Select 
-                                  onValueChange={field.onChange}
-                                  defaultValue={field.value}
-                                >
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select level" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    <SelectItem value="Beginner">Beginner</SelectItem>
-                                    <SelectItem value="Intermediate">Intermediate</SelectItem>
-                                    <SelectItem value="Advanced">Advanced</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                          <FormField
-                            control={form.control}
-                            name="duration"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Duration</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="e.g. 4 weeks" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          
-                          <FormField
-                            control={form.control}
-                            name="image"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Image URL (optional)</FormLabel>
-                                <FormControl>
-                                  <Input placeholder="https://example.com/image.jpg" {...field} />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                        
-                        <DialogFooter>
-                          <Button type="button" variant="outline" onClick={() => setOpenDialog(false)}>
-                            Cancel
-                          </Button>
-                          <Button type="submit">
-                            {isEditing ? 'Update Course' : 'Create Course'}
-                          </Button>
-                        </DialogFooter>
-                      </form>
-                    </Form>
-                  </DialogContent>
-                </Dialog>
-              </div>
-              
+          
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle>Manage Courses</CardTitle>
+              <CardDescription>
+                Create, edit and delete courses in your platform
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
               {loading ? (
                 <div className="text-center py-12">
                   <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent" role="status">
@@ -431,12 +248,12 @@ const AdminDashboard = () => {
                   </div>
                   <p className="mt-4 text-muted-foreground">Loading courses...</p>
                 </div>
-              ) : filteredCourses.length > 0 ? (
+              ) : courses.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse">
                     <thead>
                       <tr className="border-b">
-                        <th className="py-3 text-left pl-4">Title</th>
+                        <th className="py-3 text-left">Title</th>
                         <th className="py-3 text-left">Category</th>
                         <th className="py-3 text-left">Level</th>
                         <th className="py-3 text-left">Students</th>
@@ -445,9 +262,9 @@ const AdminDashboard = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredCourses.map((course) => (
+                      {courses.map((course) => (
                         <tr key={course.id} className="border-b hover:bg-muted/50">
-                          <td className="py-4 pl-4">
+                          <td className="py-4">
                             <div className="font-medium">{course.title}</div>
                             <div className="text-xs text-muted-foreground truncate max-w-[300px]">
                               {course.description}
@@ -455,23 +272,22 @@ const AdminDashboard = () => {
                           </td>
                           <td className="py-4">{course.category}</td>
                           <td className="py-4">{course.level}</td>
-                          <td className="py-4">{course.students || 0}</td>
-                          <td className="py-4">{course.lessons || 0}</td>
+                          <td className="py-4">{course.students}</td>
+                          <td className="py-4">{course.lessons}</td>
                           <td className="py-4">
                             <div className="flex space-x-2">
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleAddVideoLesson(course.id)}
-                                title="Manage Lessons"
+                                onClick={() => navigate(`/admin/courses/${course.id}/lessons`)}
                               >
-                                <Video className="h-4 w-4" />
+                                <BookOpen className="h-4 w-4 mr-1" />
+                                Lessons
                               </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleEditCourse(course)}
-                                title="Edit Course"
+                                onClick={() => handleOpenDialog(course)}
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
@@ -479,7 +295,6 @@ const AdminDashboard = () => {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleDeleteCourse(course.id)}
-                                title="Delete Course"
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
@@ -495,30 +310,174 @@ const AdminDashboard = () => {
                   <BookOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
                   <h3 className="text-lg font-medium mb-2">No Courses Found</h3>
                   <p className="text-muted-foreground mb-4">
-                    {searchTerm ? 'No courses match your search criteria.' : 'Start by adding your first course.'}
+                    You haven't created any courses yet. Get started by adding your first course.
                   </p>
-                  {searchTerm && (
-                    <Button variant="outline" onClick={() => setSearchTerm("")}>
-                      Clear Search
-                    </Button>
-                  )}
+                  <Button onClick={() => handleOpenDialog()}>
+                    <Plus className="mr-2 h-4 w-4" /> Add Your First Course
+                  </Button>
                 </div>
               )}
-            </TabsContent>
+            </CardContent>
+          </Card>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-2xl">{courses.length}</CardTitle>
+                <CardDescription>Total Courses</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-muted-foreground">
+                  <BookOpen className="inline-block h-4 w-4 mr-1" />
+                  Courses available on the platform
+                </div>
+              </CardContent>
+            </Card>
             
-            <TabsContent value="analytics">
-              <div className="text-center py-12 bg-muted/30 rounded-lg">
-                <BarChart4 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium mb-2">Analytics Coming Soon</h3>
-                <p className="text-muted-foreground">
-                  Advanced analytics and reporting features will be available soon.
-                </p>
-              </div>
-            </TabsContent>
-          </Tabs>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-2xl">
+                  {courses.reduce((total, course) => total + course.students, 0)}
+                </CardTitle>
+                <CardDescription>Total Students</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-muted-foreground">
+                  <Users className="inline-block h-4 w-4 mr-1" />
+                  Students enrolled in all courses
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-2xl">
+                  {courses.reduce((total, course) => total + course.lessons, 0)}
+                </CardTitle>
+                <CardDescription>Total Lessons</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-muted-foreground">
+                  <GraduationCap className="inline-block h-4 w-4 mr-1" />
+                  Lessons created across all courses
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
+        
+        <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+          <DialogContent className="sm:max-w-[525px]">
+            <DialogHeader>
+              <DialogTitle>{isEditing ? 'Edit Course' : 'Create New Course'}</DialogTitle>
+              <DialogDescription>
+                {isEditing 
+                  ? 'Make changes to the course details below.'
+                  : 'Fill in the form below to create a new course.'}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="title" className="block text-sm font-medium">
+                  Course Title
+                </label>
+                <Input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Sustainable Farming Techniques"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label htmlFor="description" className="block text-sm font-medium">
+                  Description
+                </label>
+                <Textarea
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Enter course description..."
+                  className="min-h-[100px]"
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="category" className="block text-sm font-medium">
+                    Category
+                  </label>
+                  <select
+                    id="category"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-md"
+                  >
+                    <option value="Agriculture">Agriculture</option>
+                    <option value="Healthcare">Healthcare</option>
+                    <option value="Education">Education</option>
+                    <option value="Technology">Technology</option>
+                    <option value="Business">Business</option>
+                    <option value="Environment">Environment</option>
+                  </select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label htmlFor="level" className="block text-sm font-medium">
+                    Level
+                  </label>
+                  <select
+                    id="level"
+                    value={level}
+                    onChange={(e) => setLevel(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-md"
+                  >
+                    <option value="Beginner">Beginner</option>
+                    <option value="Intermediate">Intermediate</option>
+                    <option value="Advanced">Advanced</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label htmlFor="duration" className="block text-sm font-medium">
+                    Duration
+                  </label>
+                  <Input
+                    id="duration"
+                    value={duration}
+                    onChange={(e) => setDuration(e.target.value)}
+                    placeholder="e.g. 2 hours"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label htmlFor="image" className="block text-sm font-medium">
+                    Image URL (optional)
+                  </label>
+                  <Input
+                    id="image"
+                    value={image}
+                    onChange={(e) => setImage(e.target.value)}
+                    placeholder="https://example.com/image.jpg"
+                  />
+                </div>
+              </div>
+              
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setOpenDialog(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">
+                  {isEditing ? 'Update Course' : 'Create Course'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </main>
-      <Footer />
     </div>
   );
 };
