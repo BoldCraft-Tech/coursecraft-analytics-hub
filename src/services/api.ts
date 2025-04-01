@@ -46,6 +46,26 @@ export const courseService = {
     return response.data;
   },
   
+  getAIRecommendations: async (interests?: string, level?: string, userPreferences?: any) => {
+    try {
+      const { data } = await axios.post(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-recommendations`,
+        { interests, level, userPreferences },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+        }
+      );
+      return data;
+    } catch (error) {
+      console.error('Error fetching AI recommendations:', error);
+      // Fallback to regular recommendations
+      return courseService.getRecommendations(interests, level);
+    }
+  },
+  
   seedLessons: async (courseId: string, numLessons: number) => {
     const response = await api.post(`/courses/${courseId}/seed-lessons`, { numLessons });
     return response.data;

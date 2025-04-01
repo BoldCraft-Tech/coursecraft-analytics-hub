@@ -1,4 +1,3 @@
-
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCourseDto } from './dto/create-course.dto';
@@ -73,6 +72,83 @@ export class CoursesService {
       recommendations: filteredCourses,
       message: message
     };
+  }
+
+  async getAIRecommendations(interests?: string, level?: string, userPreferences?: any) {
+    // Fetch all courses
+    const courses = await this.prisma.course.findMany();
+    
+    // Filter courses based on user preferences
+    let filteredCourses = [...courses];
+    
+    if (interests) {
+      filteredCourses = filteredCourses.filter(
+        course => course.category.toLowerCase() === interests.toLowerCase()
+      );
+    }
+    
+    if (level) {
+      filteredCourses = filteredCourses.filter(
+        course => course.level.toLowerCase() === level.toLowerCase()
+      );
+    }
+
+    // Use user preferences for more personalized filtering if provided
+    if (userPreferences) {
+      // Sort by preference relevance 
+      filteredCourses.sort((a, b) => {
+        const aRelevance = this.calculateRelevance(a, userPreferences);
+        const bRelevance = this.calculateRelevance(b, userPreferences);
+        return bRelevance - aRelevance;
+      });
+    }
+
+    // If no courses match the filters, return a subset of all courses
+    if (filteredCourses.length === 0) {
+      filteredCourses = courses.slice(0, 3);
+    } else if (filteredCourses.length > 5) {
+      // Limit to 5 recommendations if there are many matches
+      filteredCourses = filteredCourses.slice(0, 5);
+    }
+
+    // Generate a personalized recommendation message
+    let message = "Based on your interests";
+    if (interests) message += ` in ${interests}`;
+    if (level) message += ` and ${level} level`;
+    
+    if (userPreferences) {
+      message += ", and your learning profile";
+    }
+    
+    message += ", our AI recommends these courses to help you develop valuable skills for rural areas.";
+
+    return {
+      recommendations: filteredCourses,
+      message: message
+    };
+  }
+
+  private calculateRelevance(course, userPreferences) {
+    let relevance = 0;
+    
+    // Match category preferences
+    if (userPreferences.categories && 
+        userPreferences.categories.includes(course.category)) {
+      relevance += 3;
+    }
+    
+    // Match level preferences
+    if (userPreferences.preferredLevel === course.level) {
+      relevance += 2;
+    }
+    
+    // Consider previously completed courses in similar categories
+    if (userPreferences.completedCategories && 
+        userPreferences.completedCategories.includes(course.category)) {
+      relevance += 1;
+    }
+    
+    return relevance;
   }
 
   async seedLessons(courseId: string, numLessons: number = 5) {

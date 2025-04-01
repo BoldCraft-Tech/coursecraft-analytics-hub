@@ -1,5 +1,5 @@
 
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsObject } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CourseRecommendationDto {
@@ -12,4 +12,16 @@ export class CourseRecommendationDto {
   @IsOptional()
   @IsString()
   level?: string;
+
+  @ApiPropertyOptional({ 
+    example: {
+      userId: '123',
+      preferredLevel: 'Beginner',
+      categories: ['Technology'],
+      completedCategories: ['Agriculture']
+    }
+  })
+  @IsOptional()
+  @IsObject()
+  userPreferences?: Record<string, any>;
 }

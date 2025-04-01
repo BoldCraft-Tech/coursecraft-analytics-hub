@@ -38,6 +38,17 @@ export class CoursesController {
     );
   }
 
+  @Get('ai-recommendations')
+  @ApiOperation({ summary: 'Get AI-powered course recommendations' })
+  @ApiResponse({ status: 200, description: 'Return AI course recommendations' })
+  getAIRecommendations(@Body() courseRecommendationDto: CourseRecommendationDto) {
+    return this.coursesService.getAIRecommendations(
+      courseRecommendationDto.interests,
+      courseRecommendationDto.level,
+      courseRecommendationDto.userPreferences
+    );
+  }
+
   @Post(':id/seed-lessons')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
