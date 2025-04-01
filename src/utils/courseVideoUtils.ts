@@ -90,19 +90,44 @@ export const updateLessonProgress = async (
     
     const completed = progressPercentage >= 90; // Mark as completed if progress is at least 90%
     
-    // Upsert the progress record
-    const { error } = await supabase
+    // First check if a record already exists
+    const { data: existingProgress } = await supabase
       .from('user_lesson_progress')
-      .upsert({
-        user_id: userId,
-        lesson_id: lessonId,
-        completed,
-        last_accessed: new Date().toISOString()
-      });
+      .select('*')
+      .eq('user_id', userId)
+      .eq('lesson_id', lessonId)
+      .maybeSingle();
       
-    if (error) {
-      console.error('Error updating lesson progress:', error);
-      throw error;
+    if (existingProgress) {
+      // Update the existing record
+      const { error } = await supabase
+        .from('user_lesson_progress')
+        .update({
+          completed,
+          last_accessed: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+        .eq('lesson_id', lessonId);
+        
+      if (error) {
+        console.error('Error updating lesson progress:', error);
+        throw error;
+      }
+    } else {
+      // Insert a new record
+      const { error } = await supabase
+        .from('user_lesson_progress')
+        .insert({
+          user_id: userId,
+          lesson_id: lessonId,
+          completed,
+          last_accessed: new Date().toISOString()
+        });
+        
+      if (error) {
+        console.error('Error inserting lesson progress:', error);
+        throw error;
+      }
     }
     
     console.log(`Progress updated successfully. Completed: ${completed}`);

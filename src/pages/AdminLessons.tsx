@@ -123,7 +123,11 @@ const AdminLessons = () => {
       });
       
       setAddLessonOpen(false);
-      fetchLessons();
+      await fetchLessons();
+      
+      setTimeout(() => {
+        document.getElementById('lessons-table')?.scrollIntoView({ behavior: 'smooth' });
+      }, 500);
       
     } catch (error) {
       console.error('Error creating lesson:', error);
@@ -513,7 +517,7 @@ const AdminLessons = () => {
               <p>No lessons found. Add a lesson to get started.</p>
             ) : (
               <DndProvider backend={HTML5Backend}>
-                <Table>
+                <Table id="lessons-table">
                   <TableCaption>A list of your lessons.</TableCaption>
                   <TableHeader>
                     <TableRow>
