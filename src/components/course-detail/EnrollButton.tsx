@@ -3,9 +3,9 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { BookOpen, CheckCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { enrollmentService } from '@/services/api';
 
 interface EnrollButtonProps {
   courseId: string;
@@ -34,14 +34,8 @@ const EnrollButton = ({ courseId, isEnrolled, onEnrollmentChange }: EnrollButton
     try {
       if (isEnrolled) {
         // Unenroll from course
-        const { error } = await supabase
-          .from('enrollments')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('course_id', courseId);
+        await enrollmentService.delete(user.id, courseId);
           
-        if (error) throw error;
-
         toast({
           title: 'Unenrolled successfully',
           description: 'You have been unenrolled from this course',
@@ -50,17 +44,8 @@ const EnrollButton = ({ courseId, isEnrolled, onEnrollmentChange }: EnrollButton
         onEnrollmentChange(false);
       } else {
         // Enroll in course
-        const { error } = await supabase
-          .from('enrollments')
-          .insert({
-            user_id: user.id,
-            course_id: courseId,
-            progress: 0,
-            completed: false
-          });
+        await enrollmentService.create(user.id, courseId);
           
-        if (error) throw error;
-
         toast({
           title: 'Enrolled successfully',
           description: 'You have been enrolled in this course',

@@ -243,7 +243,7 @@ const CourseDetail = () => {
     return Math.round((completedLessons / lessons.length) * 100);
   };
 
-  const handleEnrollButtonClick = (): null => {
+  const handleEnrollButtonClick = () => {
     return null;
   };
 

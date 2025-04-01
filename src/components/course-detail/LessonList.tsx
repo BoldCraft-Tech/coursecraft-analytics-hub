@@ -1,13 +1,12 @@
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { CheckCircle, Circle, Clock, Play, Lock, Video, FileText } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
+import { lessonProgressService } from '@/services/api';
 
 interface Lesson {
   id: string;
@@ -50,47 +49,10 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
     setLoadingLessonId(lessonId);
 
     try {
-      // First check if a record already exists
-      const { data: existingProgress } = await supabase
-        .from('user_lesson_progress')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('lesson_id', lessonId)
-        .maybeSingle();
+      // Update lesson progress using API
+      await lessonProgressService.updateProgress(lessonId, user.id, !currentStatus);
 
-      if (existingProgress) {
-        // Update the existing record
-        const { error } = await supabase
-          .from('user_lesson_progress')
-          .update({ 
-            completed: !currentStatus, 
-            last_accessed: new Date().toISOString() 
-          })
-          .eq('user_id', user.id)
-          .eq('lesson_id', lessonId);
-          
-        if (error) throw error;
-      } else {
-        // Insert a new record
-        const { error } = await supabase
-          .from('user_lesson_progress')
-          .insert({
-            user_id: user.id,
-            lesson_id: lessonId,
-            completed: !currentStatus,
-            last_accessed: new Date().toISOString()
-          });
-          
-        if (error) throw error;
-      }
-
-      // Update enrollment last_accessed
-      await supabase
-        .from('enrollments')
-        .update({ last_accessed: new Date().toISOString() })
-        .eq('user_id', user.id)
-        .eq('course_id', courseId);
-
+      // Update UI through callback
       onLessonComplete(lessonId, !currentStatus);
     } catch (error: any) {
       console.error('Error updating lesson progress:', error);
