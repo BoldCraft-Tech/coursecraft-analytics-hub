@@ -333,7 +333,7 @@ const CourseDetail = () => {
                       variant="outline"
                       onClick={() => {
                         generateCertificate();
-                        return null; 
+                        return null;
                       }}
                       disabled={loadingCertificate}
                       className="w-full sm:w-auto"
@@ -344,6 +344,19 @@ const CourseDetail = () => {
                         <Award className="h-4 w-4 mr-2" />
                       )}
                       Get Certificate
+                    </Button>
+                  )}
+                  
+                  {user && (
+                    <Button 
+                      variant="outline"
+                      onClick={() => {
+                        navigate(`/admin/courses/${course.id}/lessons`);
+                        return null;
+                      }}
+                      className="w-full sm:w-auto"
+                    >
+                      Manage Lessons
                     </Button>
                   )}
                 </div>

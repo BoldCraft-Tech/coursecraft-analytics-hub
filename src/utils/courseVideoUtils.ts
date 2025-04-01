@@ -44,7 +44,7 @@ export const fetchLessonsWithVideos = async (courseId: string): Promise<Lesson[]
     const lessonsWithVideos = lessons.map(lesson => ({
       ...lesson,
       // Safely access video_url or set to null if it doesn't exist
-      video_url: lesson.video_url || null
+      video_url: (lesson as any).video_url || null
     }));
     
     console.log('Returning lessons with videos:', lessonsWithVideos);
