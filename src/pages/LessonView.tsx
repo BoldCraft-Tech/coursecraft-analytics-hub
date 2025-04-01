@@ -4,38 +4,38 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { CheckCircle, ChevronLeft, ChevronRight, Play, Clock } from 'lucide-react';
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  BookOpen,
+  CheckCircle,
+  Video,
+  ArrowLeft
+} from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { updateLessonProgress } from '@/utils/courseVideoUtils';
+import VideoPlayer from '@/components/lessons/VideoPlayer';
 
 interface Lesson {
   id: string;
   title: string;
   content: string;
-  duration: number;
   order_index: number;
-  completed?: boolean;
+  course_id: string;
+  videoUrl?: string;
   video_url?: string;
 }
 
-interface LessonNavigation {
-  id: string;
-  title: string;
-  order_index: number;
-}
-
 const LessonView = () => {
-  const { courseId, lessonId } = useParams<{ courseId: string; lessonId: string }>();
-  const [course, setCourse] = useState<any>(null);
+  const { courseId, lessonId } = useParams<{ courseId: string, lessonId: string }>();
   const [lesson, setLesson] = useState<Lesson | null>(null);
-  const [nextLesson, setNextLesson] = useState<LessonNavigation | null>(null);
-  const [prevLesson, setPrevLesson] = useState<LessonNavigation | null>(null);
-  const [isLessonCompleted, setIsLessonCompleted] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [nextLesson, setNextLesson] = useState<Lesson | null>(null);
+  const [prevLesson, setPrevLesson] = useState<Lesson | null>(null);
+  const [completed, setCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [loadingProgress, setLoadingProgress] = useState(false);
+  const [isMarkingComplete, setIsMarkingComplete] = useState(false);
   
   const { user } = useAuth();
   const { toast } = useToast();
@@ -44,40 +44,33 @@ const LessonView = () => {
   useEffect(() => {
     if (!courseId || !lessonId) return;
 
-    const fetchData = async () => {
+    const fetchLessonDetails = async () => {
       setLoading(true);
       try {
-        // Fetch course data
-        const { data: courseData, error: courseError } = await supabase
-          .from('courses')
-          .select('id, title')
-          .eq('id', courseId)
-          .single();
-          
-        if (courseError) throw courseError;
-        setCourse(courseData);
-        
         // Fetch current lesson
-        const { data: lessonData, error: lessonError } = await supabase
+        const { data: currentLesson, error: currentError } = await supabase
           .from('lessons')
           .select('*')
           .eq('id', lessonId)
           .single();
           
-        if (lessonError) throw lessonError;
-        setLesson(lessonData);
+        if (currentError) throw currentError;
         
-        // Fetch all lessons for navigation
-        const { data: allLessons, error: allLessonsError } = await supabase
+        setLesson(currentLesson);
+        
+        // Fetch all lessons for this course to determine next/prev
+        const { data: allLessons, error: lessonsError } = await supabase
           .from('lessons')
-          .select('id, title, order_index')
+          .select('*')
           .eq('course_id', courseId)
           .order('order_index', { ascending: true });
           
-        if (allLessonsError) throw allLessonsError;
+        if (lessonsError) throw lessonsError;
         
         // Find current lesson index
         const currentIndex = allLessons.findIndex(l => l.id === lessonId);
+        
+        // Set previous and next lessons
         if (currentIndex > 0) {
           setPrevLesson(allLessons[currentIndex - 1]);
         } else {
@@ -90,7 +83,7 @@ const LessonView = () => {
           setNextLesson(null);
         }
         
-        // If user is authenticated, fetch completion status
+        // Check if lesson is completed
         if (user) {
           const { data: progressData, error: progressError } = await supabase
             .from('user_lesson_progress')
@@ -99,50 +92,26 @@ const LessonView = () => {
             .eq('lesson_id', lessonId)
             .maybeSingle();
             
-          if (progressError) throw progressError;
-          
-          setIsLessonCompleted(progressData?.completed || false);
-          
-          // Calculate course progress
-          const { data: courseProgress, error: progressError2 } = await supabase
-            .from('enrollments')
-            .select('progress')
-            .eq('user_id', user.id)
-            .eq('course_id', courseId)
-            .maybeSingle();
-            
-          if (progressError2) throw progressError2;
-          
-          if (courseProgress) {
-            setProgress(courseProgress.progress);
+          if (!progressError && progressData) {
+            setCompleted(progressData.completed);
           }
           
-          // Update last accessed timestamp (don't await to avoid blocking UI)
-          const updateLastAccessed = async () => {
-            try {
-              // Update lesson progress
-              await supabase
-                .from('user_lesson_progress')
-                .upsert({
-                  user_id: user.id,
-                  lesson_id: lessonId,
-                  last_accessed: new Date().toISOString(),
-                  completed: progressData?.completed || false
-                });
-                
-              // Update enrollment last_accessed
-              await supabase
-                .from('enrollments')
-                .update({ last_accessed: new Date().toISOString() })
-                .eq('user_id', user.id)
-                .eq('course_id', courseId);
-            } catch (error) {
-              console.error('Error updating last accessed:', error);
-            }
-          };
-          
-          // Execute the update in the background
-          updateLastAccessed();
+          // Update last accessed time for this lesson
+          await supabase
+            .from('user_lesson_progress')
+            .upsert({
+              user_id: user.id,
+              lesson_id: lessonId,
+              completed: progressData?.completed || false,
+              last_accessed: new Date().toISOString()
+            });
+            
+          // Update last accessed time for this course enrollment
+          await supabase
+            .from('enrollments')
+            .update({ last_accessed: new Date().toISOString() })
+            .eq('user_id', user.id)
+            .eq('course_id', courseId);
         }
       } catch (error: any) {
         console.error('Error fetching lesson details:', error);
@@ -156,97 +125,45 @@ const LessonView = () => {
       }
     };
 
-    fetchData();
+    fetchLessonDetails();
   }, [courseId, lessonId, user, toast]);
 
-  const handleToggleCompletion = async () => {
-    if (!user || !lessonId || !courseId) {
+  const handleMarkComplete = async () => {
+    if (!user || !courseId || !lessonId) {
       toast({
         title: 'Authentication required',
         description: 'Please sign in to track your progress',
       });
       return;
     }
-
-    setLoadingProgress(true);
-
+    
+    setIsMarkingComplete(true);
+    
     try {
-      const newStatus = !isLessonCompleted;
+      await updateLessonProgress(user.id, courseId, lessonId, completed ? 0 : 100);
       
-      // Update progress in database
-      const { error } = await supabase
-        .from('user_lesson_progress')
-        .upsert({
-          user_id: user.id,
-          lesson_id: lessonId,
-          completed: newStatus,
-          last_accessed: new Date().toISOString()
-        });
-        
-      if (error) throw error;
-      
-      // Update local state
-      setIsLessonCompleted(newStatus);
-      
-      // Get count of completed lessons for the course
-      const { data: lessonsQuery } = await supabase
-        .from('lessons')
-        .select('id')
-        .eq('course_id', courseId);
-        
-      const lessonIds = lessonsQuery?.map(lesson => lesson.id) || [];
-      
-      const { data: progressData, error: progressError } = await supabase
-        .from('user_lesson_progress')
-        .select('lesson_id')
-        .eq('user_id', user.id)
-        .eq('completed', true)
-        .in('lesson_id', lessonIds);
-        
-      if (progressError) throw progressError;
-      
-      // Get total lessons count
-      const { count: totalLessons, error: countError } = await supabase
-        .from('lessons')
-        .select('*', { count: 'exact', head: true })
-        .eq('course_id', courseId);
-        
-      if (countError) throw countError;
-      
-      // Calculate new progress percentage
-      const completedCount = progressData?.length || 0;
-      const progressPercentage = Math.round((completedCount / (totalLessons || 1)) * 100);
-      
-      // Update enrollment progress
-      const { error: updateError } = await supabase
-        .from('enrollments')
-        .update({ 
-          progress: progressPercentage,
-          completed: progressPercentage === 100,
-          last_accessed: new Date().toISOString()
-        })
-        .eq('user_id', user.id)
-        .eq('course_id', courseId);
-        
-      if (updateError) throw updateError;
-      
-      // Update local progress state
-      setProgress(progressPercentage);
+      setCompleted(!completed);
       
       toast({
-        title: newStatus ? 'Lesson completed' : 'Lesson marked as incomplete',
-        description: newStatus ? 'Great job! Keep going!' : 'Progress updated',
+        title: completed ? 'Lesson marked as incomplete' : 'Lesson completed',
+        description: completed 
+          ? 'You can revisit this lesson anytime' 
+          : 'Great job! Keep going with your learning journey',
       });
     } catch (error: any) {
-      console.error('Error updating progress:', error);
+      console.error('Error updating lesson progress:', error);
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to update progress',
+        title: 'Error updating progress',
+        description: error.message || 'Please try again',
         variant: 'destructive',
       });
     } finally {
-      setLoadingProgress(false);
+      setIsMarkingComplete(false);
     }
+  };
+
+  const navigateToLesson = (lessonId: string) => {
+    navigate(`/courses/${courseId}/lessons/${lessonId}`);
   };
 
   if (loading) {
@@ -282,123 +199,95 @@ const LessonView = () => {
     );
   }
 
+  // Determine if this lesson has a video
+  const hasVideo = !!lesson.videoUrl || !!lesson.video_url;
+  const videoUrl = lesson.videoUrl || lesson.video_url;
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <main className="flex-grow pt-20">
-        <div className="container px-4 mx-auto py-8">
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="p-0 h-auto" 
-                onClick={() => navigate(`/courses/${courseId}`)}
-              >
-                <ChevronLeft className="h-4 w-4 mr-1" />
-                Back to course
-              </Button>
-              <span className="text-muted-foreground">/</span>
-              <span className="text-muted-foreground truncate max-w-[200px]">{course?.title}</span>
-            </div>
-            
-            <h1 className="text-2xl font-bold mb-2">{lesson.title}</h1>
-            
-            <div className="flex items-center gap-4 mb-4">
-              <div className="flex items-center text-sm">
-                <Clock className="h-4 w-4 mr-1 text-muted-foreground" />
-                <span>{lesson.duration} min</span>
+        <section className="py-8">
+          <div className="container px-4 mx-auto">
+            <div className="max-w-4xl mx-auto">
+              <div className="flex items-center mb-6">
+                <Link to={`/courses/${courseId}`}>
+                  <Button variant="ghost" className="gap-1">
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to Course
+                  </Button>
+                </Link>
               </div>
-              <div className="flex items-center text-sm">
-                <Play className="h-4 w-4 mr-1 text-muted-foreground" />
-                <span>Lesson {lesson.order_index}</span>
-              </div>
-            </div>
-            
-            {user && (
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">Course progress</span>
-                  <span className="text-xs font-medium bg-primary/10 text-primary px-2 py-1 rounded-full">
-                    {progress}%
-                  </span>
+              
+              <div className="mb-8">
+                <div className="flex items-center gap-2 mb-2">
+                  {hasVideo ? (
+                    <Video className="h-5 w-5 text-primary" />
+                  ) : (
+                    <BookOpen className="h-5 w-5 text-primary" />
+                  )}
+                  <h1 className="text-2xl font-bold">{lesson.title}</h1>
                 </div>
-                <Progress value={progress} className="h-2" />
-              </div>
-            )}
-          </div>
-          
-          <div className="bg-card border rounded-lg p-6 mb-8">
-            <div className="prose max-w-none">
-              <div className="min-h-[300px]">
-                {/* Video lesson content */}
-                {lesson.video_url ? (
-                  <div className="aspect-video mb-6">
-                    <iframe
-                      src={lesson.video_url}
-                      className="w-full h-full rounded-lg"
-                      title={lesson.title}
-                      allowFullScreen
-                      frameBorder="0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    ></iframe>
-                  </div>
-                ) : (
-                  <div className="p-8 bg-muted/30 rounded-lg flex items-center justify-center mb-6">
-                    <Play className="h-12 w-12 text-primary" />
+                
+                {/* Video Player */}
+                {hasVideo && videoUrl && (
+                  <div className="mb-8">
+                    <VideoPlayer 
+                      videoUrl={videoUrl} 
+                      lessonId={lesson.id} 
+                      courseId={courseId || ''} 
+                    />
                   </div>
                 )}
                 
-                <h2 className="text-xl font-semibold mb-4">Lesson Content</h2>
-                <div className="whitespace-pre-wrap">
-                  {lesson.content}
+                {/* Lesson content */}
+                <div className="glass-panel p-6 rounded-xl mb-6">
+                  <div className="prose dark:prose-invert max-w-none">
+                    <p>{lesson.content}</p>
+                  </div>
+                </div>
+                
+                {/* Lesson navigation and actions */}
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                  <div className="flex items-center space-x-4">
+                    {prevLesson && (
+                      <Button 
+                        variant="outline" 
+                        onClick={() => navigateToLesson(prevLesson.id)}
+                      >
+                        <ChevronLeft className="mr-2 h-4 w-4" />
+                        Previous Lesson
+                      </Button>
+                    )}
+                    
+                    {nextLesson && (
+                      <Button 
+                        onClick={() => navigateToLesson(nextLesson.id)}
+                      >
+                        Next Lesson
+                        <ChevronRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  
+                  <Button
+                    variant={completed ? "outline" : "default"}
+                    onClick={handleMarkComplete}
+                    disabled={isMarkingComplete}
+                    className={completed ? "text-green-500 border-green-500" : ""}
+                  >
+                    {isMarkingComplete ? (
+                      <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
+                    ) : completed ? (
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                    ) : null}
+                    {completed ? "Completed" : "Mark as Complete"}
+                  </Button>
                 </div>
               </div>
             </div>
           </div>
-          
-          <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
-            <div>
-              {user && (
-                <Button
-                  onClick={handleToggleCompletion}
-                  variant={isLessonCompleted ? "outline" : "default"}
-                  disabled={loadingProgress}
-                >
-                  {loadingProgress ? (
-                    <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
-                  ) : isLessonCompleted ? (
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                  ) : (
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                  )}
-                  {isLessonCompleted ? 'Mark as Incomplete' : 'Mark as Complete'}
-                </Button>
-              )}
-            </div>
-            
-            <div className="flex gap-2">
-              {prevLesson && (
-                <Button
-                  variant="outline"
-                  onClick={() => navigate(`/courses/${courseId}/lessons/${prevLesson.id}`)}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-2" />
-                  Previous Lesson
-                </Button>
-              )}
-              
-              {nextLesson && (
-                <Button
-                  onClick={() => navigate(`/courses/${courseId}/lessons/${nextLesson.id}`)}
-                >
-                  Next Lesson
-                  <ChevronRight className="h-4 w-4 ml-2" />
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
+        </section>
       </main>
       <Footer />
     </div>

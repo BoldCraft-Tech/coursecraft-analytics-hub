@@ -9,7 +9,7 @@ export interface LessonWithVideo {
   order_index: number;
   course_id: string;
   duration: number;
-  videoUrl?: string; // Make this optional
+  videoUrl?: string; // Optional video URL field
 }
 
 // Function to fetch lessons with videos for a course
@@ -17,31 +17,35 @@ export const fetchLessonsWithVideos = async (courseId: string): Promise<LessonWi
   try {
     console.log('Fetching lessons for course:', courseId);
     
-    const { data, error } = await supabase
+    // First check if there are any lessons
+    const { data: lessonsData, error: lessonsError } = await supabase
       .from('lessons')
       .select('*')
       .eq('course_id', courseId)
       .order('order_index');
     
-    if (error) {
-      console.error('Error in supabase query:', error);
-      throw error;
+    if (lessonsError) {
+      console.error('Error in supabase query:', lessonsError);
+      throw lessonsError;
     }
     
-    console.log('Lessons data from database:', data);
+    console.log('Lessons data from database:', lessonsData);
     
-    if (!data || data.length === 0) {
+    if (!lessonsData || lessonsData.length === 0) {
       console.log('No lessons found for this course');
       return [];
     }
     
-    // Transform the data to include video URLs (if they exist)
-    const lessonsWithVideos = data.map(lesson => ({
-      ...lesson,
-      videoUrl: lesson.video_url || undefined
-    }));
+    // Transform the data to include video URLs
+    const lessonsWithVideos = lessonsData.map(lesson => {
+      return {
+        ...lesson,
+        // Add videoUrl if it exists in the lesson
+        videoUrl: lesson.video_url || undefined
+      };
+    });
     
-    console.log('Transformed lessons:', lessonsWithVideos);
+    console.log('Transformed lessons with videos:', lessonsWithVideos);
     
     return lessonsWithVideos;
   } catch (error) {

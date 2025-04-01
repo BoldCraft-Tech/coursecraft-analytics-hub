@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import EnrollButton from '@/components/course-detail/EnrollButton';
 import CourseProgress from '@/components/course-detail/CourseProgress';
 import LessonList from '@/components/course-detail/LessonList';
+import { fetchLessonsWithVideos } from '@/utils/courseVideoUtils';
 
 interface Course {
   id: string;
@@ -31,6 +32,7 @@ interface Lesson {
   duration: number;
   order_index: number;
   completed?: boolean;
+  videoUrl?: string;
 }
 
 interface Enrollment {
@@ -73,16 +75,10 @@ const CourseDetail = () => {
         console.log('Course data retrieved:', courseData);
         setCourse(courseData);
         
-        // Fetch lessons
-        const { data: lessonsData, error: lessonsError } = await supabase
-          .from('lessons')
-          .select('*')
-          .eq('course_id', id)
-          .order('order_index', { ascending: true });
-          
-        if (lessonsError) throw lessonsError;
+        // Fetch lessons with videos
+        const lessonsData = await fetchLessonsWithVideos(id);
         
-        console.log('Lessons data retrieved:', lessonsData);
+        console.log('Lessons with videos retrieved:', lessonsData);
         console.log('Number of lessons found:', lessonsData?.length || 0);
         
         // If user is logged in, fetch enrollment and lesson progress
