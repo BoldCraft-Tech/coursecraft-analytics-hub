@@ -1,3 +1,4 @@
+
 import { supabase } from '@/integrations/supabase/client';
 
 // Updated interface to include video_url
@@ -194,5 +195,4 @@ const updateCourseProgress = async (userId: string, courseId: string): Promise<v
   }
 };
 
-// Export other utility functions for external use
-export { getYouTubeVideoId, getEmbeddableYouTubeUrl, searchYouTubeVideos };
+// Removed duplicate exports here - these functions are already exported above

@@ -121,7 +121,7 @@ const CertificateDebugInfo = ({ userId, courseId }: CertificateDebugInfoProps) =
             <span className="text-sm font-medium">Certificate Eligibility Debug</span>
             <Badge variant={
               completionStatus === 'All lessons completed' 
-                ? 'success' 
+                ? 'accent' 
                 : completionStatus === 'No lessons in course'
                 ? 'outline'
                 : 'secondary'
@@ -140,7 +140,7 @@ const CertificateDebugInfo = ({ userId, courseId }: CertificateDebugInfoProps) =
                     <span>{lesson.title}</span>
                     <Badge variant={
                       completedLessons.some(p => p.lesson_id === lesson.id) 
-                        ? 'success' 
+                        ? 'accent' 
                         : 'outline'
                     }>
                       {completedLessons.some(p => p.lesson_id === lesson.id) ? 'Completed' : 'Incomplete'}
