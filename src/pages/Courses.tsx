@@ -8,80 +8,74 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { Search } from 'lucide-react';
-
-const mockCourses: Course[] = [
-  {
-    id: '1',
-    title: 'Sustainable Farming Techniques',
-    description: 'Learn modern and sustainable methods to improve crop yields while protecting the environment.',
-    category: 'Agriculture',
-    level: 'Beginner',
-    duration: '6 weeks',
-    students: 1250,
-    lessons: 24,
-  },
-  {
-    id: '2',
-    title: 'Digital Marketing for Small Businesses',
-    description: 'Master digital marketing strategies to grow your business in rural markets.',
-    category: 'Business',
-    level: 'Intermediate',
-    duration: '8 weeks',
-    students: 845,
-    lessons: 32,
-  },
-  {
-    id: '3',
-    title: 'Community Healthcare Basics',
-    description: 'Essential healthcare knowledge for community health workers in rural areas.',
-    category: 'Healthcare',
-    level: 'Beginner',
-    duration: '4 weeks',
-    students: 1632,
-    lessons: 18,
-  },
-  {
-    id: '4',
-    title: 'Rural Entrepreneurship',
-    description: 'Start and grow a successful business in rural settings with limited resources.',
-    category: 'Business',
-    level: 'Advanced',
-    duration: '10 weeks',
-    students: 720,
-    lessons: 42,
-  },
-  {
-    id: '5',
-    title: 'Renewable Energy Solutions',
-    description: 'Practical guide to implementing renewable energy systems in off-grid communities.',
-    category: 'Technology',
-    level: 'Intermediate',
-    duration: '7 weeks',
-    students: 530,
-    lessons: 28,
-  },
-  {
-    id: '6',
-    title: 'Water Conservation and Management',
-    description: 'Techniques for efficient water usage and conservation in drought-prone areas.',
-    category: 'Environment',
-    level: 'Beginner',
-    duration: '5 weeks',
-    students: 915,
-    lessons: 20,
-  },
-];
+import { Search, Robot } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/components/ui/use-toast';
 
 const Courses = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [category, setCategory] = useState('');
-  const [level, setLevel] = useState('');
+  const [category, setCategory] = useState('all-categories');
+  const [level, setLevel] = useState('all-levels');
   const [duration, setDuration] = useState([12]);
-  const [filteredCourses, setFilteredCourses] = useState<Course[]>(mockCourses);
-  
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [filteredCourses, setFilteredCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [aiRecommendations, setAiRecommendations] = useState<{ courses: Course[], message: string } | null>(null);
+  const [showingRecommendations, setShowingRecommendations] = useState(false);
+  const { toast } = useToast();
+
+  // Fetch courses from Supabase
   useEffect(() => {
-    let result = mockCourses;
+    const fetchCourses = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('courses')
+          .select('*');
+        
+        if (error) {
+          throw error;
+        }
+        
+        // Transform data to match Course type if needed
+        const formattedCourses = data.map(course => ({
+          id: course.id,
+          title: course.title,
+          description: course.description,
+          category: course.category,
+          level: course.level,
+          duration: course.duration,
+          students: course.students || 0,
+          lessons: course.lessons || 0,
+        }));
+        
+        setCourses(formattedCourses);
+        setFilteredCourses(formattedCourses);
+      } catch (error) {
+        console.error('Error fetching courses:', error);
+        toast({
+          title: "Failed to load courses",
+          description: "Please try again later",
+          variant: "destructive",
+        });
+        // Set some fallback data if fetch fails
+        setCourses([]);
+        setFilteredCourses([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCourses();
+  }, [toast]);
+  
+  // Apply filters when filter states change
+  useEffect(() => {
+    if (showingRecommendations) {
+      setShowingRecommendations(false);
+    }
+    
+    let result = courses;
     
     // Apply search filter
     if (searchTerm) {
@@ -92,12 +86,12 @@ const Courses = () => {
     }
     
     // Apply category filter
-    if (category) {
+    if (category && category !== 'all-categories') {
       result = result.filter((course) => course.category === category);
     }
     
     // Apply level filter
-    if (level) {
+    if (level && level !== 'all-levels') {
       result = result.filter((course) => course.level === level);
     }
     
@@ -110,13 +104,65 @@ const Courses = () => {
     }
     
     setFilteredCourses(result);
-  }, [searchTerm, category, level, duration]);
+  }, [searchTerm, category, level, duration, courses, showingRecommendations]);
   
   const resetFilters = () => {
     setSearchTerm('');
-    setCategory('');
-    setLevel('');
+    setCategory('all-categories');
+    setLevel('all-levels');
     setDuration([12]);
+    setShowingRecommendations(false);
+  };
+
+  // Get AI recommendations based on selected filters
+  const getAiRecommendations = async () => {
+    try {
+      setLoading(true);
+      
+      // Use the category as "interests" input for the AI
+      const interests = category !== 'all-categories' ? category : '';
+      
+      const response = await fetch('https://lmizrylbhbapimyuyajc.functions.supabase.co/course-recommendations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          interests,
+          level: level !== 'all-levels' ? level : '',
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to get recommendations');
+      }
+      
+      const data = await response.json();
+      setAiRecommendations({
+        courses: data.recommendations,
+        message: data.message
+      });
+      
+      setShowingRecommendations(true);
+      
+      // Show the AI message as a toast
+      toast({
+        title: "AI Recommendation",
+        description: data.message,
+        duration: 6000,
+      });
+      
+    } catch (error) {
+      console.error('Error getting AI recommendations:', error);
+      toast({
+        title: "Failed to get recommendations",
+        description: "Please try again later",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
   
   return (
@@ -200,25 +246,86 @@ const Courses = () => {
                 </div>
               </div>
               
-              <div className="flex justify-end">
-                <Button variant="outline" onClick={resetFilters}>
+              <div className="flex justify-between flex-wrap gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={resetFilters}
+                  disabled={loading}
+                >
                   Reset Filters
                 </Button>
+                
+                <Button 
+                  onClick={getAiRecommendations}
+                  disabled={loading}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  <Robot className="mr-2 h-4 w-4" />
+                  Get AI Recommendations
+                </Button>
               </div>
+              
+              {/* AI Recommendation Message */}
+              {showingRecommendations && aiRecommendations && (
+                <div className="mt-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+                  <div className="flex items-start">
+                    <Robot className="h-5 w-5 text-indigo-600 mt-0.5 mr-2" />
+                    <p className="text-sm text-indigo-800">{aiRecommendations.message}</p>
+                  </div>
+                </div>
+              )}
             </div>
             
-            {/* Courses Grid */}
-            {filteredCourses.length > 0 ? (
-              <CourseGrid courses={filteredCourses} />
-            ) : (
+            {/* Courses Header */}
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold">
+                {showingRecommendations 
+                  ? "AI Recommended Courses" 
+                  : "All Courses"}
+                {!loading && (
+                  <span className="ml-2 text-sm font-normal text-muted-foreground">
+                    ({showingRecommendations ? aiRecommendations?.courses.length : filteredCourses.length} courses)
+                  </span>
+                )}
+              </h2>
+            </div>
+            
+            {/* Loading State */}
+            {loading && (
               <div className="text-center py-12">
-                <h3 className="text-xl font-medium mb-2">No courses found</h3>
-                <p className="text-muted-foreground">Try adjusting your filters to find what you're looking for.</p>
-                <Button variant="outline" onClick={resetFilters} className="mt-4">
-                  Reset Filters
-                </Button>
+                <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent motion-reduce:animate-[spin_1.5s_linear_infinite]" role="status">
+                  <span className="sr-only">Loading...</span>
+                </div>
+                <p className="mt-4 text-muted-foreground">Loading courses...</p>
               </div>
             )}
+            
+            {/* Courses Grid */}
+            {!loading && (showingRecommendations ? (
+              aiRecommendations && aiRecommendations.courses.length > 0 ? (
+                <CourseGrid courses={aiRecommendations.courses} />
+              ) : (
+                <div className="text-center py-12">
+                  <h3 className="text-xl font-medium mb-2">No recommendations found</h3>
+                  <p className="text-muted-foreground">Try adjusting your filters to get better recommendations.</p>
+                  <Button variant="outline" onClick={resetFilters} className="mt-4">
+                    Reset Filters
+                  </Button>
+                </div>
+              )
+            ) : (
+              filteredCourses.length > 0 ? (
+                <CourseGrid courses={filteredCourses} />
+              ) : (
+                <div className="text-center py-12">
+                  <h3 className="text-xl font-medium mb-2">No courses found</h3>
+                  <p className="text-muted-foreground">Try adjusting your filters to find what you're looking for.</p>
+                  <Button variant="outline" onClick={resetFilters} className="mt-4">
+                    Reset Filters
+                  </Button>
+                </div>
+              )
+            ))}
           </div>
         </section>
       </main>
