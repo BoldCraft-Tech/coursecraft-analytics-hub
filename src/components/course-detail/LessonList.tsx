@@ -50,7 +50,7 @@ const LessonList = ({ courseId, lessons, isEnrolled, onLessonComplete }: LessonL
     setLoadingLessonId(lessonId);
 
     try {
-      // Update lesson progress using API
+      // Update lesson progress using Supabase directly
       await lessonProgressService.updateProgress(lessonId, user.id, !currentStatus);
 
       // Update UI through callback
