@@ -40,36 +40,111 @@ export const fetchLessonsWithVideos = async (courseId: string): Promise<Lesson[]
     
     console.log(`Found ${lessons.length} lessons`);
     
-    // Fetch video URLs from videos table if they exist
-    // This is an example - adjust according to your actual database structure
-    const { data: videos, error: videosError } = await supabase
-      .from('videos')
-      .select('lesson_id, url')
-      .in('lesson_id', lessons.map(lesson => lesson.id));
-      
-    if (videosError) {
-      console.error('Error fetching videos:', videosError);
-      // We continue without videos if there's an error fetching them
-    }
-    
-    // Create a map of lesson IDs to video URLs
-    const videoMap = videos 
-      ? videos.reduce((map: Record<string, string>, video) => {
-          map[video.lesson_id] = video.url;
-          return map;
-        }, {})
-      : {};
-    
-    // Combine lessons with video URLs
+    // Since there's no videos table in the schema, we're adapting this to work with
+    // the current structure. In a real application, you might want to create a videos table.
+    // For now, let's return lessons as is, assuming video_url would be added later.
     const lessonsWithVideos = lessons.map(lesson => ({
       ...lesson,
-      video_url: videoMap[lesson.id] || null
+      video_url: lesson.video_url || null
     }));
     
     console.log('Returning lessons with videos:', lessonsWithVideos);
     return lessonsWithVideos;
   } catch (error) {
     console.error('Error in fetchLessonsWithVideos:', error);
+    throw error;
+  }
+};
+
+/**
+ * Updates a user's lesson progress
+ */
+export const updateLessonProgress = async (
+  userId: string, 
+  courseId: string, 
+  lessonId: string, 
+  progressPercentage: number
+): Promise<void> => {
+  try {
+    console.log(`Updating progress for user ${userId}, lesson ${lessonId} to ${progressPercentage}%`);
+    
+    const completed = progressPercentage >= 90; // Mark as completed if progress is at least 90%
+    
+    // Upsert the progress record
+    const { error } = await supabase
+      .from('user_lesson_progress')
+      .upsert({
+        user_id: userId,
+        lesson_id: lessonId,
+        completed,
+        last_accessed: new Date().toISOString()
+      });
+      
+    if (error) {
+      console.error('Error updating lesson progress:', error);
+      throw error;
+    }
+    
+    console.log(`Progress updated successfully. Completed: ${completed}`);
+    
+    // Update the course enrollment progress if needed
+    if (completed) {
+      await updateCourseProgress(userId, courseId);
+    }
+  } catch (error) {
+    console.error('Error in updateLessonProgress:', error);
+    throw error;
+  }
+};
+
+/**
+ * Helper function to update overall course progress
+ */
+const updateCourseProgress = async (userId: string, courseId: string): Promise<void> => {
+  try {
+    // Get total lessons for this course
+    const { data: totalLessonsData, error: totalError } = await supabase
+      .from('lessons')
+      .select('id')
+      .eq('course_id', courseId);
+      
+    if (totalError) throw totalError;
+    
+    const totalLessons = totalLessonsData?.length || 0;
+    
+    if (totalLessons === 0) return; // No lessons to track
+    
+    // Get completed lessons for this user and course
+    const { data: completedLessonsData, error: completedError } = await supabase
+      .from('user_lesson_progress')
+      .select('lesson_id')
+      .eq('user_id', userId)
+      .eq('completed', true)
+      .in('lesson_id', totalLessonsData.map(lesson => lesson.id));
+      
+    if (completedError) throw completedError;
+    
+    const completedLessons = completedLessonsData?.length || 0;
+    
+    // Calculate progress percentage
+    const progressPercentage = Math.round((completedLessons / totalLessons) * 100);
+    
+    // Update enrollment record
+    const { error: updateError } = await supabase
+      .from('enrollments')
+      .update({ 
+        progress: progressPercentage,
+        completed: progressPercentage === 100,
+        last_accessed: new Date().toISOString()
+      })
+      .eq('user_id', userId)
+      .eq('course_id', courseId);
+      
+    if (updateError) throw updateError;
+    
+    console.log(`Course progress updated to ${progressPercentage}%`);
+  } catch (error) {
+    console.error('Error updating course progress:', error);
     throw error;
   }
 };

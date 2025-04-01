@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -27,7 +26,6 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
-// Define proper course type
 interface Course {
   id: string;
   title: string;
@@ -49,7 +47,6 @@ const AdminDashboard = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   
-  // Form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [image, setImage] = useState('');
@@ -100,7 +97,6 @@ const AdminDashboard = () => {
 
   const handleOpenDialog = (course?: Course) => {
     if (course) {
-      // Edit mode
       setIsEditing(true);
       setSelectedCourse(course);
       setTitle(course.title);
@@ -110,7 +106,6 @@ const AdminDashboard = () => {
       setCategory(course.category);
       setDuration(course.duration);
     } else {
-      // Create mode
       resetForm();
     }
     setOpenDialog(true);
@@ -119,7 +114,6 @@ const AdminDashboard = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation
     if (!title || !description || !level || !category || !duration) {
       toast({
         title: 'Missing fields',
@@ -130,7 +124,7 @@ const AdminDashboard = () => {
     }
     
     try {
-      const courseData: Partial<Course> = {
+      const courseData = {
         title,
         description,
         image: image || null,
@@ -141,7 +135,6 @@ const AdminDashboard = () => {
       };
       
       if (isEditing && selectedCourse) {
-        // Update existing course
         const { error } = await supabase
           .from('courses')
           .update(courseData)
@@ -154,15 +147,16 @@ const AdminDashboard = () => {
           description: 'The course has been updated successfully',
         });
       } else {
-        // Create new course
+        const newCourse = {
+          ...courseData,
+          students: 0,
+          lessons: 0,
+          created_at: new Date().toISOString()
+        };
+        
         const { error } = await supabase
           .from('courses')
-          .insert([{
-            ...courseData,
-            students: 0,
-            lessons: 0,
-            created_at: new Date().toISOString()
-          }]);
+          .insert([newCourse]);
           
         if (error) throw error;
         
@@ -172,7 +166,6 @@ const AdminDashboard = () => {
         });
       }
       
-      // Reset and refresh
       setOpenDialog(false);
       resetForm();
       fetchCourses();
@@ -191,7 +184,6 @@ const AdminDashboard = () => {
     }
     
     try {
-      // Delete all lessons first
       const { error: lessonsError } = await supabase
         .from('lessons')
         .delete()
@@ -199,7 +191,6 @@ const AdminDashboard = () => {
         
       if (lessonsError) throw lessonsError;
       
-      // Then delete the course
       const { error: courseError } = await supabase
         .from('courses')
         .delete()

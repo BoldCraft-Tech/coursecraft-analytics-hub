@@ -1,4 +1,3 @@
-
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -24,7 +23,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, newSession) => {
         setSession(newSession);
@@ -33,7 +31,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
@@ -80,8 +77,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             name,
           },
           emailRedirectTo: window.location.origin,
-          // Disable email confirmation by not setting a flag 
-          // (will use Supabase default behavior)
         },
       });
 
@@ -89,14 +84,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw error;
       }
 
-      // After sign up, automatically sign in the user
       if (data?.user) {
         toast({
           title: "Account created",
           description: "Your account has been successfully created.",
         });
         
-        // Automatically sign in after signup
         await signIn(email, password);
       }
     } catch (error: any) {

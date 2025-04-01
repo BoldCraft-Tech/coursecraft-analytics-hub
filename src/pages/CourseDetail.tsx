@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
@@ -64,7 +63,6 @@ const CourseDetail = () => {
       try {
         console.log('Fetching course details for ID:', id);
         
-        // Fetch course data
         const { data: courseData, error: courseError } = await supabase
           .from('courses')
           .select('*')
@@ -76,15 +74,12 @@ const CourseDetail = () => {
         console.log('Course data retrieved:', courseData);
         setCourse(courseData);
         
-        // Fetch lessons with videos
         const lessonsData = await fetchLessonsWithVideos(id);
         
         console.log('Lessons with videos retrieved:', lessonsData);
         console.log('Number of lessons found:', lessonsData?.length || 0);
         
-        // If user is logged in, fetch enrollment and lesson progress
         if (user) {
-          // Fetch enrollment status
           const { data: enrollmentData, error: enrollmentError } = await supabase
             .from('enrollments')
             .select('*')
@@ -96,7 +91,6 @@ const CourseDetail = () => {
           
           setEnrollment(enrollmentData);
           
-          // Fetch lesson progress
           const { data: progressData, error: progressError } = await supabase
             .from('user_lesson_progress')
             .select('lesson_id, completed')
@@ -104,13 +98,11 @@ const CourseDetail = () => {
             
           if (progressError) throw progressError;
           
-          // Create a map of lesson IDs to completion status
           const completionMap = progressData.reduce((map: Record<string, boolean>, item) => {
             map[item.lesson_id] = item.completed;
             return map;
           }, {});
           
-          // Add completion status to lessons
           const lessonsWithProgress = lessonsData.map(lesson => ({
             ...lesson,
             completed: completionMap[lesson.id] || false
@@ -118,11 +110,9 @@ const CourseDetail = () => {
           
           setLessons(lessonsWithProgress);
           
-          // Count completed lessons
           const completed = progressData.filter(p => p.completed).length;
           setCompletedLessons(completed);
           
-          // Check if user has a certificate for this course
           const { data: certificateData, error: certificateError } = await supabase
             .from('certificates')
             .select('id')
@@ -155,18 +145,15 @@ const CourseDetail = () => {
 
   const handleEnrollmentChange = (enrolled: boolean) => {
     if (enrolled && !enrollment) {
-      // User just enrolled
       setEnrollment({
-        id: 'new-enrollment', // temporary id
+        id: 'new-enrollment',
         progress: 0,
         completed: false
       });
     } else if (!enrolled && enrollment) {
-      // User just unenrolled
       setEnrollment(null);
       setCompletedLessons(0);
       
-      // Reset lesson completion status
       setLessons(prev => prev.map(lesson => ({
         ...lesson,
         completed: false
@@ -175,34 +162,28 @@ const CourseDetail = () => {
   };
 
   const handleLessonComplete = (lessonId: string, completed: boolean) => {
-    // Update lessons state
     setLessons(prev => prev.map(lesson => 
       lesson.id === lessonId 
         ? { ...lesson, completed } 
         : lesson
     ));
     
-    // Count completed lessons
     const newCompletedCount = completed 
       ? completedLessons + 1 
       : completedLessons - 1;
     
     setCompletedLessons(newCompletedCount);
     
-    // Calculate progress percentage
     if (lessons.length > 0) {
       const progressPercentage = Math.round((newCompletedCount / lessons.length) * 100);
       
-      // Update enrollment progress
       if (enrollment) {
-        // Update local state
         setEnrollment(prev => prev ? {
           ...prev,
           progress: progressPercentage,
           completed: progressPercentage === 100
         } : null);
         
-        // Update in database (don't await to avoid blocking UI)
         supabase
           .from('enrollments')
           .update({ 
@@ -253,7 +234,7 @@ const CourseDetail = () => {
     }
   };
 
-  const getProgressPercentage = () => {
+  const getProgressPercentage = (): number => {
     if (!lessons.length) return 0;
     return Math.round((completedLessons / lessons.length) * 100);
   };
@@ -410,7 +391,6 @@ const CourseDetail = () => {
                   </TabsContent>
                   
                   <TabsContent value="about">
-                    {/* About tab content */}
                     <div className="space-y-6">
                       <div>
                         <h2 className="text-xl font-semibold mb-4">About This Course</h2>
