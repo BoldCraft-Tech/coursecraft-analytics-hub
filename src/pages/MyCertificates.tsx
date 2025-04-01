@@ -5,7 +5,7 @@ import Navbar from '@/components/layout/Navbar';
 import Footer from '@/components/layout/Footer';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Award, Download, Calendar, Share2 } from 'lucide-react';
+import { Award, Download, Calendar, Share2, Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -29,6 +29,7 @@ const MyCertificates = () => {
   const [loading, setLoading] = useState(true);
   const [selectedCertificate, setSelectedCertificate] = useState<Certificate | null>(null);
   const [showCertificateModal, setShowCertificateModal] = useState(false);
+  const [downloadingCertificate, setDownloadingCertificate] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -113,6 +114,7 @@ const MyCertificates = () => {
 
   const downloadCertificateAsPDF = async (certificate: Certificate) => {
     try {
+      setDownloadingCertificate(true);
       const certificateElement = document.getElementById('certificate-template');
       if (!certificateElement) {
         toast({
@@ -157,6 +159,8 @@ const MyCertificates = () => {
         description: 'Please try again later',
         variant: 'destructive',
       });
+    } finally {
+      setDownloadingCertificate(false);
     }
   };
 
@@ -253,9 +257,21 @@ const MyCertificates = () => {
             <Button variant="outline" onClick={() => setShowCertificateModal(false)}>
               Close
             </Button>
-            <Button onClick={() => downloadCertificateAsPDF(selectedCertificate)}>
-              <Download className="h-4 w-4 mr-2" />
-              Download PDF
+            <Button 
+              onClick={() => downloadCertificateAsPDF(selectedCertificate)}
+              disabled={downloadingCertificate}
+            >
+              {downloadingCertificate ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Generating PDF...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download PDF
+                </>
+              )}
             </Button>
           </div>
         </div>
