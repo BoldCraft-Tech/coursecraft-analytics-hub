@@ -79,6 +79,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           data: {
             name,
           },
+          emailRedirectTo: window.location.origin,
+          // Disable email confirmation
+          shouldCreateUser: true,
         },
       });
 
@@ -86,12 +89,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw error;
       }
 
+      // After sign up, automatically sign in the user
       if (data?.user) {
         toast({
           title: "Account created",
           description: "Your account has been successfully created.",
         });
-        navigate('/dashboard');
+        
+        // Automatically sign in after signup
+        await signIn(email, password);
       }
     } catch (error: any) {
       toast({
