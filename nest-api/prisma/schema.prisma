@@ -1,0 +1,94 @@
+
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  password     String
+  full_name    String?
+  avatar_url   String?
+  created_at   DateTime       @default(now())
+  updated_at   DateTime       @default(now())
+  enrollments  Enrollment[]
+  certificates Certificate[]
+  lessonProgress UserLessonProgress[]
+}
+
+model Course {
+  id          String       @id @default(uuid())
+  title       String
+  description String
+  category    String
+  level       String
+  duration    String
+  image       String?
+  students    Int?         @default(0)
+  lessons     Int?         @default(0)
+  created_at  DateTime     @default(now())
+  updated_at  DateTime     @default(now())
+  enrollments Enrollment[]
+  lessonsList Lesson[]
+  certificates Certificate[]
+}
+
+model Lesson {
+  id          String       @id @default(uuid())
+  title       String
+  content     String
+  duration    Int
+  order_index Int
+  video_url   String?
+  created_at  DateTime     @default(now())
+  updated_at  DateTime     @default(now())
+  course      Course       @relation(fields: [course_id], references: [id])
+  course_id   String
+  progress    UserLessonProgress[]
+}
+
+model Enrollment {
+  id            String   @id @default(uuid())
+  progress      Int      @default(0)
+  completed     Boolean  @default(false)
+  enrolled_at   DateTime @default(now())
+  last_accessed DateTime @default(now())
+  user          User     @relation(fields: [user_id], references: [id])
+  user_id       String
+  course        Course   @relation(fields: [course_id], references: [id])
+  course_id     String
+
+  @@unique([user_id, course_id])
+}
+
+model Certificate {
+  id              String   @id @default(uuid())
+  issue_date      DateTime @default(now())
+  certificate_url String?
+  user            User     @relation(fields: [user_id], references: [id])
+  user_id         String
+  course          Course   @relation(fields: [course_id], references: [id])
+  course_id       String
+
+  @@unique([user_id, course_id])
+}
+
+model UserLessonProgress {
+  id            String   @id @default(uuid())
+  completed     Boolean  @default(false)
+  last_accessed DateTime @default(now())
+  user          User     @relation(fields: [user_id], references: [id])
+  user_id       String
+  lesson        Lesson   @relation(fields: [lesson_id], references: [id])
+  lesson_id     String
+
+  @@unique([user_id, lesson_id])
+}
