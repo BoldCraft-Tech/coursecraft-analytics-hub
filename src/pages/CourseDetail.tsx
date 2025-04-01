@@ -331,7 +331,10 @@ const CourseDetail = () => {
                   {enrollment && enrollment.progress === 100 && !certificateId && (
                     <Button 
                       variant="outline"
-                      onClick={generateCertificate}
+                      onClick={() => {
+                        generateCertificate();
+                        return null; // Return null to satisfy ReactNode requirement
+                      }}
                       disabled={loadingCertificate}
                       className="w-full sm:w-auto"
                     >
