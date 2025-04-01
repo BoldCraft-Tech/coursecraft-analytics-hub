@@ -1,106 +1,123 @@
 
 import { supabase } from '@/integrations/supabase/client';
 
-// Public course video APIs
-const PUBLIC_APIS = {
-  YOUTUBE: 'https://www.googleapis.com/youtube/v3/search',
-  PEXELS: 'https://api.pexels.com/videos/search',
-  // You can add more APIs here
-};
+// Define interface for lesson with video support
+export interface LessonWithVideo {
+  id: string;
+  title: string;
+  content: string;
+  order_index: number;
+  course_id: string;
+  duration: number;
+  videoUrl?: string; // Make this optional
+}
 
-// Function to add a video URL to a lesson
-export const addVideoUrlToLesson = async (lessonId: string, videoUrl: string) => {
+// Function to fetch lessons with video URLs for a course
+export const fetchLessonsWithVideos = async (courseId: string): Promise<LessonWithVideo[]> => {
   try {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('lessons')
-      .update({ video_url: videoUrl })
-      .eq('id', lessonId);
-      
+      .select('*')
+      .eq('course_id', courseId)
+      .order('order_index');
+    
     if (error) throw error;
-    return { success: true };
+    
+    // Transform the data to include video URLs
+    const lessonsWithVideos = data.map(lesson => ({
+      ...lesson,
+      videoUrl: lesson.video_url || undefined
+    }));
+    
+    return lessonsWithVideos;
   } catch (error) {
-    console.error('Error adding video URL:', error);
-    return { success: false, error };
+    console.error('Error fetching lessons with videos:', error);
+    throw error;
   }
 };
 
-// Function to fetch public educational videos
-export const fetchPublicVideos = async (query: string, limit: number = 5) => {
-  // This is a placeholder function - you would need to implement actual API calls
-  // using your own API keys for YouTube, Pexels, etc.
-  
-  // Example implementation for demonstration purposes:
+// Function to update a user's progress after watching a video lesson
+export const updateLessonProgress = async (
+  userId: string,
+  courseId: string,
+  lessonId: string,
+  progressPercentage: number
+): Promise<void> => {
   try {
-    // Mock response with sample video URLs
-    return {
-      success: true,
-      videos: [
-        {
-          id: '1',
-          title: 'Introduction to Agriculture',
-          thumbnail: 'https://picsum.photos/300/200',
-          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-          duration: '10:15',
-          source: 'YouTube'
-        },
-        {
-          id: '2',
-          title: 'Sustainable Farming Techniques',
-          thumbnail: 'https://picsum.photos/300/201',
-          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-          duration: '15:30',
-          source: 'YouTube'
-        },
-        {
-          id: '3',
-          title: 'Water Conservation Methods',
-          thumbnail: 'https://picsum.photos/300/202',
-          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-          duration: '8:45',
-          source: 'Pexels'
-        },
-        {
-          id: '4',
-          title: 'Rural Development Programs',
-          thumbnail: 'https://picsum.photos/300/203',
-          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-          duration: '12:20',
-          source: 'YouTube'
-        },
-        {
-          id: '5',
-          title: 'Modern Rural Healthcare',
-          thumbnail: 'https://picsum.photos/300/204',
-          url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-          duration: '20:05',
-          source: 'Pexels'
-        }
-      ]
-    };
+    // First, check if a progress record already exists
+    const { data: existingProgress } = await supabase
+      .from('lesson_progress')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('lesson_id', lessonId)
+      .single();
+
+    if (existingProgress) {
+      // Update existing progress record
+      await supabase
+        .from('lesson_progress')
+        .update({ progress_percentage: progressPercentage, last_watched_at: new Date().toISOString() })
+        .eq('id', existingProgress.id);
+    } else {
+      // Create new progress record
+      await supabase
+        .from('lesson_progress')
+        .insert({
+          user_id: userId,
+          course_id: courseId,
+          lesson_id: lessonId,
+          progress_percentage: progressPercentage,
+          last_watched_at: new Date().toISOString()
+        });
+    }
+
+    // Also update overall course progress
+    await updateCourseProgress(userId, courseId);
   } catch (error) {
-    console.error('Error fetching public videos:', error);
-    return { success: false, error, videos: [] };
+    console.error('Error updating lesson progress:', error);
+    throw error;
   }
 };
 
-// Function to extract video ID from YouTube URL
-export const extractYouTubeVideoId = (url: string) => {
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-  const match = url.match(regExp);
-  return (match && match[2].length === 11) ? match[2] : null;
-};
-
-// Function to get YouTube embed URL from video ID
-export const getYouTubeEmbedUrl = (videoId: string) => {
-  return `https://www.youtube.com/embed/${videoId}`;
-};
-
-// Function to check if a URL is a valid video URL
-export const isValidVideoUrl = (url: string) => {
-  // This is a basic validation - you might want to expand it
-  const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/;
-  const vimeoRegex = /^(https?:\/\/)?(www\.)?(vimeo\.com)\/.+$/;
-  const mp4Regex = /\.(mp4|webm|ogg)$/i;
-  
-  return youtubeRegex.test(url) || vimeoRegex.test(url) || mp4Regex.test(url);
+// Function to update overall course progress
+export const updateCourseProgress = async (userId: string, courseId: string): Promise<void> => {
+  try {
+    // Get all lessons for the course
+    const { data: lessons, error: lessonsError } = await supabase
+      .from('lessons')
+      .select('id')
+      .eq('course_id', courseId);
+    
+    if (lessonsError) throw lessonsError;
+    
+    // Get progress for all lessons in this course
+    const { data: progress, error: progressError } = await supabase
+      .from('lesson_progress')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('course_id', courseId);
+    
+    if (progressError) throw progressError;
+    
+    // Calculate overall progress
+    const totalLessons = lessons.length;
+    const completedLessons = progress.filter(p => p.progress_percentage >= 90).length;
+    const progressPercentage = totalLessons > 0 ? Math.floor((completedLessons / totalLessons) * 100) : 0;
+    
+    // Update enrollment record
+    const { error: updateError } = await supabase
+      .from('enrollments')
+      .update({ 
+        progress: progressPercentage,
+        completed: progressPercentage === 100,
+        last_accessed: new Date().toISOString()
+      })
+      .eq('user_id', userId)
+      .eq('course_id', courseId);
+    
+    if (updateError) throw updateError;
+  } catch (error) {
+    console.error('Error updating course progress:', error);
+    throw error;
+  }
 };

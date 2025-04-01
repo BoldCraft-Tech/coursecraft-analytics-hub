@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Menu, X, ChevronDown, User, Video, BookOpen, Home, Info, Newspaper, Users } from 'lucide-react';
+import { Menu, X, ChevronDown, User, Video, BookOpen, Home, Info, Newspaper, Users, Award } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import {
   DropdownMenu,
@@ -40,8 +40,16 @@ const Navbar = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
+  // Define types for navigation links
+  type NavLink = {
+    name: string;
+    path: string;
+    icon: React.ReactNode;
+    dropdown?: { name: string; path: string }[];
+  };
+
   // Public navigation links (shown when user is not logged in)
-  const publicNavLinks = [
+  const publicNavLinks: NavLink[] = [
     { name: 'Home', path: '/', icon: <Home className="h-4 w-4 mr-2" /> },
     { name: 'Courses', path: '/courses', icon: <BookOpen className="h-4 w-4 mr-2" /> },
     { name: 'About', path: '/about', icon: <Info className="h-4 w-4 mr-2" /> },
@@ -58,7 +66,7 @@ const Navbar = () => {
   ];
 
   // Authenticated user navigation links
-  const authNavLinks = [
+  const authNavLinks: NavLink[] = [
     { name: 'Dashboard', path: '/dashboard', icon: <Home className="h-4 w-4 mr-2" /> },
     { name: 'My Learning', path: '/learning', icon: <BookOpen className="h-4 w-4 mr-2" /> },
     { name: 'My Courses', path: '/my-courses', icon: <Video className="h-4 w-4 mr-2" /> },
