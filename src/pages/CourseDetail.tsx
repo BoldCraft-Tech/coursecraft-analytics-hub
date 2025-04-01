@@ -161,7 +161,7 @@ const CourseDetail = () => {
     }
   };
 
-  const handleLessonComplete = (lessonId: string, completed: boolean) => {
+  const handleLessonComplete = async (lessonId: string, completed: boolean) => {
     setLessons(prev => prev.map(lesson => 
       lesson.id === lessonId 
         ? { ...lesson, completed } 
@@ -184,7 +184,7 @@ const CourseDetail = () => {
           completed: progressPercentage === 100
         } : null);
         
-        supabase
+        await supabase
           .from('enrollments')
           .update({ 
             progress: progressPercentage,
@@ -192,6 +192,10 @@ const CourseDetail = () => {
           })
           .eq('user_id', user?.id)
           .eq('course_id', id);
+          
+        if (progressPercentage === 100 && !certificateId) {
+          await generateCertificate();
+        }
       }
     }
   };
@@ -240,7 +244,7 @@ const CourseDetail = () => {
   };
 
   const handleEnrollButtonClick = () => {
-    return undefined;
+    return null;
   };
 
   if (loading) {
