@@ -207,9 +207,18 @@ const Learning = () => {
         body: { message: userMessage, chatHistory },
       });
       
-      if (response.error) throw new Error(response.error.message || "Error calling AI assistant");
+      // Even if there's an error in the edge function, it will now return a 200 status
+      // with an error field in the response, so we don't need to check for response.error
+      const { response: aiResponse, recommendedCourses, error } = response.data;
       
-      const { response: aiResponse, recommendedCourses } = response.data;
+      if (error) {
+        console.warn('AI assistant warning:', error);
+        toast({
+          title: 'AI Assistant',
+          description: 'Using basic mode due to AI service limitations.',
+          variant: 'default',
+        });
+      }
       
       // Update chat with AI response
       setChatHistory(prev => [...prev, { 
@@ -229,11 +238,20 @@ const Learning = () => {
       console.error('Error with AI assistant:', error);
       toast({
         title: 'AI Assistant Error',
-        description: error.message || 'Failed to get AI response. Please try again.',
+        description: 'Switching to basic mode. Try again later.',
         variant: 'destructive',
       });
       
-      // Fallback to keyword search in case of AI error
+      // Add fallback response to chat
+      setChatHistory(prev => [...prev, { 
+        role: 'assistant', 
+        content: "I'm experiencing technical difficulties. Let me help you with basic course matching instead." 
+      }]);
+      
+      // Switch to basic mode
+      setUseAI(false);
+      
+      // Fallback to keyword search
       const extractedKeywords = extractKeywords(userMessage);
       setKeywords(prev => [...prev, ...extractedKeywords]);
       await searchCoursesByKeywords(extractedKeywords);
