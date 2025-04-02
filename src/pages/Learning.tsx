@@ -11,7 +11,7 @@ import { Bot, SendHorizontal, Search } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import CourseGrid from '@/components/courses/CourseGrid';
-import { courseService } from '@/services/api';
+import { supabase } from '@/integrations/supabase/client';
 
 const CATEGORY_KEYWORDS = {
   Technology: ['technology', 'tech', 'software', 'coding', 'programming', 'computer', 'digital', 'web', 'app', 'mobile', 'data', 'online', 'internet', 'it'],
@@ -51,25 +51,53 @@ const Learning = () => {
     }
   }, [keywords]);
 
-  // Fetch courses when interests or level change and a search has been performed
+  // Fetch courses when search is performed
   useEffect(() => {
-    if (searchPerformed && (interests || level)) {
-      fetchMatchingCourses();
+    if (searchPerformed && message) {
+      searchCoursesByKeywords(keywords);
     }
-  }, [interests, level, searchPerformed]);
+  }, [keywords, searchPerformed]);
 
-  const fetchMatchingCourses = async () => {
+  const searchCoursesByKeywords = async (searchKeywords: string[]) => {
+    if (!searchKeywords.length) return;
+    
     setIsLoadingCourses(true);
     try {
-      const data = await courseService.getAIRecommendations(interests, level);
-      if (data && data.recommendations) {
-        setMatchedCourses(data.recommendations);
+      console.log('Searching for courses with keywords:', searchKeywords);
+      
+      // Fetch all courses initially
+      const { data: courses, error } = await supabase
+        .from('courses')
+        .select('*');
+        
+      if (error) throw error;
+      
+      if (!courses || courses.length === 0) {
+        setMatchedCourses([]);
+        setIsLoadingCourses(false);
+        return;
       }
+      
+      // Filter courses based on keywords (in title, description, category, level)
+      const lowerKeywords = searchKeywords.map(kw => kw.toLowerCase());
+      
+      const matchedResults = courses.filter(course => {
+        // Check if any keyword matches in title or description or category or level
+        return lowerKeywords.some(keyword => 
+          course.title.toLowerCase().includes(keyword) ||
+          course.description.toLowerCase().includes(keyword) ||
+          course.category.toLowerCase().includes(keyword) ||
+          course.level.toLowerCase().includes(keyword)
+        );
+      });
+      
+      console.log(`Found ${matchedResults.length} courses matching keywords`);
+      setMatchedCourses(matchedResults);
     } catch (error) {
-      console.error('Error fetching courses based on chat:', error);
+      console.error('Error searching courses:', error);
       toast({
         title: 'Error',
-        description: 'Failed to fetch matching courses. Please try again.',
+        description: 'Could not search for courses. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -98,7 +126,15 @@ const Learning = () => {
       
       setSearchPerformed(true);
       
-      const responseText = generateResponse(extractedInterests, extractedLevel, extractedKeywords);
+      await searchCoursesByKeywords(extractedKeywords);
+      
+      // Generate response based on search results
+      let responseText = '';
+      if (matchedCourses.length > 0) {
+        responseText = `I found ${matchedCourses.length} courses that match your keywords. Take a look at these courses related to ${extractedInterests || 'your interests'}!`;
+      } else {
+        responseText = `I couldn't find exact matches for "${message}", but here are some ${extractedInterests || 'recommended'} courses at ${extractedLevel || 'your'} level that might interest you.`;
+      }
       
       await new Promise(resolve => setTimeout(resolve, 800));
       
@@ -160,18 +196,6 @@ const Learning = () => {
       }
     }
     return 'Beginner'; // Default
-  };
-
-  const generateResponse = (interests: string, level: string, keywords: string[]): string => {
-    let response = `I've found some ${level} level courses in ${interests} that might interest you.`;
-    
-    if (keywords.length > 0) {
-      const keywordPreview = keywords.slice(0, 3).join(', ');
-      response += ` Based on keywords like "${keywordPreview}", I've tailored these recommendations for you.`;
-    }
-    
-    response += " Take a look at the courses below.";
-    return response;
   };
 
   return (
@@ -252,15 +276,15 @@ const Learning = () => {
                     </CardTitle>
                     <CardDescription>
                       {matchedCourses.length > 0 
-                        ? `Found ${matchedCourses.length} ${interests ? interests : ''} courses ${level ? `for ${level} level` : ''}`
-                        : 'Searching for matching courses...'}
+                        ? `Found ${matchedCourses.length} courses matching your keywords`
+                        : 'Searching for courses...'}
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <CourseGrid 
                       courses={matchedCourses}
                       loading={isLoadingCourses}
-                      emptyMessage="No courses found matching your request. Try a different topic or level."
+                      emptyMessage="No courses found matching your request. Try different keywords or topics."
                     />
                   </CardContent>
                 </Card>

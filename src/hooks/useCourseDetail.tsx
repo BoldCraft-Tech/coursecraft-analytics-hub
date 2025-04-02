@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -87,7 +88,10 @@ const useCourseDetail = (courseId: string | undefined) => {
             
           if (progressError) throw progressError;
           
-          const completionMap = progressData.reduce((map: Record<string, boolean>, item) => {
+          // Use type assertion to handle the TypeScript error
+          const typedProgressData = progressData as Array<{lesson_id: string, completed: boolean}>;
+          
+          const completionMap = typedProgressData.reduce((map: Record<string, boolean>, item) => {
             map[item.lesson_id] = item.completed;
             return map;
           }, {});
@@ -99,7 +103,7 @@ const useCourseDetail = (courseId: string | undefined) => {
           
           setLessons(lessonsWithProgress);
           
-          const completed = progressData.filter(p => p.completed).length;
+          const completed = typedProgressData.filter(p => p.completed).length;
           setCompletedLessons(completed);
           
           const { data: certificateData, error: certificateError } = await supabase
@@ -295,7 +299,10 @@ const useCourseDetail = (courseId: string | undefined) => {
         
       if (progressError) throw progressError;
       
-      const completedLessonIds = progressData.map(progress => progress.lesson_id);
+      // Use type assertion to handle the TypeScript error
+      const typedProgressData = progressData as Array<{lesson_id: string, completed: boolean}>;
+      
+      const completedLessonIds = typedProgressData.map(progress => progress.lesson_id);
       
       console.log('Certificate generation check:', {
         lessonIds,
