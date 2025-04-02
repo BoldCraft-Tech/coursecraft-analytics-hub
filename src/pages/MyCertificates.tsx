@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
@@ -45,15 +44,13 @@ const MyCertificates = () => {
         setLoading(true);
         console.log('Fetching certificates for user:', user.id);
         
-        // Fix: Use explicit join syntax for courses
         const { data, error } = await supabase
           .from('certificates')
           .select(`
             id,
             issue_date,
             certificate_url,
-            course_id,
-            courses (
+            course:course_id (
               id, 
               title, 
               category, 
@@ -67,27 +64,18 @@ const MyCertificates = () => {
 
         console.log('Certificates data:', data);
         
-        // Transform the data to match the expected interface
-        const formattedCertificates = data.map((cert: any) => ({
-          id: cert.id,
-          issue_date: cert.issue_date,
-          certificate_url: cert.certificate_url || `https://example.com/cert/${user.id}/${cert.course_id}`,
-          course: {
-            id: cert.courses.id,
-            title: cert.courses.title,
-            category: cert.courses.category,
-            level: cert.courses.level
+        if (data && data.length > 0) {
+          setCertificates(data as Certificate[]);
+          
+          if (highlightedCourseId) {
+            const highlighted = data.find((cert: any) => cert.course.id === highlightedCourseId);
+            if (highlighted) {
+              setSelectedCertificate(highlighted as Certificate);
+              setShowCertificateModal(true);
+            }
           }
-        }));
-        
-        setCertificates(formattedCertificates);
-        
-        if (highlightedCourseId && formattedCertificates.length > 0) {
-          const highlighted = formattedCertificates.find(cert => cert.course.id === highlightedCourseId);
-          if (highlighted) {
-            setSelectedCertificate(highlighted);
-            setShowCertificateModal(true);
-          }
+        } else {
+          setCertificates([]);
         }
       } catch (error: any) {
         console.error('Error fetching certificates:', error);
@@ -119,7 +107,6 @@ const MyCertificates = () => {
         });
       });
     } else {
-      // Fallback for browsers that don't support the Web Share API
       navigator.clipboard.writeText(certificate.certificate_url).then(() => {
         toast({
           title: 'Certificate link copied',
@@ -207,7 +194,6 @@ const MyCertificates = () => {
           if (!error && data) {
             setUserName(data.full_name || user.email || 'Student');
           } else {
-            // Fallback to email if profile not found
             setUserName(user.email || 'Student');
           }
         };
