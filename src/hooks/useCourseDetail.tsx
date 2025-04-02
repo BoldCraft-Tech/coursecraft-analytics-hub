@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -83,8 +82,8 @@ const useCourseDetail = (courseId: string | undefined) => {
           
           const { data: progressData, error: progressError } = await supabase
             .from('user_lesson_progress')
-            .select('lesson_id, completed')
-            .eq('user_id', user.id);
+            .select('user_lesson_progress.lesson_id, user_lesson_progress.completed')
+            .eq('user_lesson_progress.user_id', user.id);
             
           if (progressError) throw progressError;
           
@@ -177,7 +176,6 @@ const useCourseDetail = (courseId: string | undefined) => {
         if (user && courseId && enrollment.id) {
           console.log('Deleting enrollment for user:', user.id, 'course:', courseId, 'enrollment id:', enrollment.id);
           
-          // Delete directly using the enrollment ID for more precision
           const { error: deleteError } = await supabase
             .from('enrollments')
             .delete()
@@ -185,7 +183,6 @@ const useCourseDetail = (courseId: string | undefined) => {
             
           if (deleteError) throw deleteError;
           
-          // Also clean up related progress records
           const { error: progressDeleteError } = await supabase
             .from('user_lesson_progress')
             .delete()
@@ -289,7 +286,6 @@ const useCourseDetail = (courseId: string | undefined) => {
         return;
       }
       
-      // Use explicit table reference to avoid ambiguity
       const { data: progressData, error: progressError } = await supabase
         .from('user_lesson_progress')
         .select('user_lesson_progress.lesson_id, user_lesson_progress.completed')
@@ -319,7 +315,6 @@ const useCourseDetail = (courseId: string | undefined) => {
         return;
       }
       
-      // Mark all lessons as completed
       for (const lessonId of lessonIds) {
         await supabase
           .from('user_lesson_progress')
@@ -331,7 +326,6 @@ const useCourseDetail = (courseId: string | undefined) => {
           }, { onConflict: 'user_id,lesson_id' });
       }
       
-      // Update enrollment to completed
       await supabase
         .from('enrollments')
         .update({ 
@@ -342,7 +336,6 @@ const useCourseDetail = (courseId: string | undefined) => {
         .eq('user_id', user.id)
         .eq('course_id', courseId);
       
-      // Call the generate_certificate RPC function
       console.log('Calling generate_certificate RPC with course_id:', courseId);
       const { data, error } = await supabase.rpc(
         'generate_certificate',
