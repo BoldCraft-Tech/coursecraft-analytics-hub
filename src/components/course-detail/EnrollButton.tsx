@@ -49,6 +49,27 @@ const EnrollButton = ({ courseId, isEnrolled, onEnrollmentChange }: EnrollButton
         
         onEnrollmentChange(false);
       } else {
+        // Check if enrollment already exists first
+        const { data: existingEnrollment, error: checkError } = await supabase
+          .from('enrollments')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('course_id', courseId)
+          .maybeSingle();
+          
+        if (checkError) throw checkError;
+        
+        // If already enrolled, update the UI state but don't try to insert again
+        if (existingEnrollment) {
+          toast({
+            title: 'Already enrolled',
+            description: 'You are already enrolled in this course',
+          });
+          onEnrollmentChange(true);
+          setLoading(false);
+          return;
+        }
+          
         // Enroll in course using Supabase
         const { error } = await supabase
           .from('enrollments')
