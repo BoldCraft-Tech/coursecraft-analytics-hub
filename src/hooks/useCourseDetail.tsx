@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -173,24 +174,25 @@ const useCourseDetail = (courseId: string | undefined) => {
       }
     } else if (!enrolled && enrollment) {
       try {
-        if (user && courseId) {
-          console.log('Deleting enrollment for user:', user.id, 'course:', courseId);
+        if (user && courseId && enrollment.id) {
+          console.log('Deleting enrollment for user:', user.id, 'course:', courseId, 'enrollment id:', enrollment.id);
           
-          const { data: enrollmentData, error: findError } = await supabase
-            .from('enrollments')
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('course_id', courseId)
-            .single();
-            
-          if (findError) throw findError;
-          
+          // Delete directly using the enrollment ID for more precision
           const { error: deleteError } = await supabase
             .from('enrollments')
             .delete()
-            .eq('id', enrollmentData.id);
+            .eq('id', enrollment.id);
             
           if (deleteError) throw deleteError;
+          
+          // Also clean up related progress records
+          const { error: progressDeleteError } = await supabase
+            .from('user_lesson_progress')
+            .delete()
+            .eq('user_id', user.id)
+            .in('lesson_id', lessons.map(lesson => lesson.id));
+            
+          if (progressDeleteError) console.warn('Could not delete all progress records:', progressDeleteError);
           
           setEnrollment(null);
           setCompletedLessons(0);
@@ -287,12 +289,13 @@ const useCourseDetail = (courseId: string | undefined) => {
         return;
       }
       
+      // Use explicit table reference to avoid ambiguity
       const { data: progressData, error: progressError } = await supabase
         .from('user_lesson_progress')
-        .select('lesson_id, completed')
-        .eq('user_id', user.id)
-        .eq('completed', true)
-        .in('lesson_id', lessonIds);
+        .select('user_lesson_progress.lesson_id, user_lesson_progress.completed')
+        .eq('user_lesson_progress.user_id', user.id)
+        .eq('user_lesson_progress.completed', true)
+        .in('user_lesson_progress.lesson_id', lessonIds);
         
       if (progressError) throw progressError;
       
@@ -316,6 +319,7 @@ const useCourseDetail = (courseId: string | undefined) => {
         return;
       }
       
+      // Mark all lessons as completed
       for (const lessonId of lessonIds) {
         await supabase
           .from('user_lesson_progress')
@@ -327,6 +331,7 @@ const useCourseDetail = (courseId: string | undefined) => {
           }, { onConflict: 'user_id,lesson_id' });
       }
       
+      // Update enrollment to completed
       await supabase
         .from('enrollments')
         .update({ 
@@ -337,12 +342,19 @@ const useCourseDetail = (courseId: string | undefined) => {
         .eq('user_id', user.id)
         .eq('course_id', courseId);
       
+      // Call the generate_certificate RPC function
+      console.log('Calling generate_certificate RPC with course_id:', courseId);
       const { data, error } = await supabase.rpc(
         'generate_certificate',
         { course_id: courseId }
       );
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error in generate_certificate RPC call:', error);
+        throw error;
+      }
+      
+      console.log('Certificate generation result:', data);
       
       if (data) {
         setCertificateId(data);

@@ -46,6 +46,7 @@ const AdminDashboard = () => {
   const [openDialog, setOpenDialog] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
+  const [deleteInProgress, setDeleteInProgress] = useState(false);
   
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -146,17 +147,27 @@ const AdminDashboard = () => {
           title: 'Course updated',
           description: 'The course has been updated successfully',
         });
+        
+        setCourses(prevCourses => 
+          prevCourses.map(c => 
+            c.id === selectedCourse.id 
+              ? { ...c, ...courseData } 
+              : c
+          )
+        );
       } else {
         const newCourse = {
           ...courseData,
           students: 0,
           lessons: 0,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          owner: user?.id
         };
         
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('courses')
-          .insert([newCourse]);
+          .insert([newCourse])
+          .select();
           
         if (error) throw error;
         
@@ -164,11 +175,14 @@ const AdminDashboard = () => {
           title: 'Course created',
           description: 'The new course has been created successfully',
         });
+        
+        if (data && data.length > 0) {
+          setCourses(prevCourses => [data[0], ...prevCourses]);
+        }
       }
       
       setOpenDialog(false);
       resetForm();
-      fetchCourses();
     } catch (error: any) {
       toast({
         title: 'Error saving course',
@@ -183,13 +197,49 @@ const AdminDashboard = () => {
       return;
     }
     
+    setDeleteInProgress(true);
+    
     try {
-      const { error: lessonsError } = await supabase
+      console.log('Deleting course with ID:', courseId);
+      
+      const { data: lessons, error: lessonsError } = await supabase
+        .from('lessons')
+        .select('id')
+        .eq('course_id', courseId);
+        
+      if (lessonsError) throw lessonsError;
+      
+      if (lessons && lessons.length > 0) {
+        const lessonIds = lessons.map(lesson => lesson.id);
+        
+        const { error: progressError } = await supabase
+          .from('user_lesson_progress')
+          .delete()
+          .in('lesson_id', lessonIds);
+          
+        if (progressError) console.warn('Error deleting lesson progress:', progressError);
+      }
+      
+      const { error: enrollmentsError } = await supabase
+        .from('enrollments')
+        .delete()
+        .eq('course_id', courseId);
+        
+      if (enrollmentsError) console.warn('Error deleting enrollments:', enrollmentsError);
+      
+      const { error: certificatesError } = await supabase
+        .from('certificates')
+        .delete()
+        .eq('course_id', courseId);
+        
+      if (certificatesError) console.warn('Error deleting certificates:', certificatesError);
+      
+      const { error: lessonsDeleteError } = await supabase
         .from('lessons')
         .delete()
         .eq('course_id', courseId);
         
-      if (lessonsError) throw lessonsError;
+      if (lessonsDeleteError) throw lessonsDeleteError;
       
       const { error: courseError } = await supabase
         .from('courses')
@@ -203,13 +253,16 @@ const AdminDashboard = () => {
         description: 'The course and all its lessons have been deleted',
       });
       
-      fetchCourses();
+      setCourses(prevCourses => prevCourses.filter(course => course.id !== courseId));
     } catch (error: any) {
+      console.error('Error deleting course:', error);
       toast({
         title: 'Error deleting course',
         description: error.message,
         variant: 'destructive',
       });
+    } finally {
+      setDeleteInProgress(false);
     }
   };
 
@@ -286,6 +339,7 @@ const AdminDashboard = () => {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleDeleteCourse(course.id)}
+                                disabled={deleteInProgress}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>

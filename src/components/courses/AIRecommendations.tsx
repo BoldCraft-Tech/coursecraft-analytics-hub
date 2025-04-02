@@ -36,17 +36,27 @@ const AIRecommendations = ({ interests, level }: AIRecommendationsProps) => {
         ? await courseService.getAIRecommendations(interests, level, userPreferences)
         : await courseService.getRecommendations(interests, level);
       
+      console.log('Recommendations data:', data);
       setRecommendations(data.recommendations || []);
       setMessage(data.message || 'Here are some recommended courses for you.');
     } catch (error) {
       console.error('Error fetching recommendations:', error);
       toast({
         title: 'Error',
-        description: 'Failed to load course recommendations',
+        description: 'Failed to load course recommendations. Falling back to standard recommendations.',
         variant: 'destructive',
       });
-      setRecommendations([]);
-      setMessage('Unable to load recommendations at this time.');
+      
+      try {
+        // Fallback to standard recommendations
+        const fallbackData = await courseService.getRecommendations(interests, level);
+        setRecommendations(fallbackData.recommendations || []);
+        setMessage('Standard recommendations (AI recommendations unavailable)');
+      } catch (fallbackError) {
+        console.error('Error fetching fallback recommendations:', fallbackError);
+        setRecommendations([]);
+        setMessage('Unable to load recommendations at this time.');
+      }
     } finally {
       setLoading(false);
     }

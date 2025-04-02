@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -49,8 +50,10 @@ export const courseService = {
   getAIRecommendations: async (interests?: string, level?: string, userPreferences?: any) => {
     try {
       // Try getting recommendations from Supabase Edge Function
+      // Make sure to use the full URL including the Supabase project ID
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://lmizrylbhbapimyuyajc.supabase.co';
       const { data } = await axios.post(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-recommendations`,
+        `${supabaseUrl}/functions/v1/ai-recommendations`,
         { interests, level, userPreferences },
         {
           headers: {
@@ -210,13 +213,13 @@ async function updateCourseProgress(lessonId: string, userId: string) {
       
     if (lessonIdsError) throw lessonIdsError;
     
-    // Count completed lessons by user
+    // Count completed lessons by user - explicitly reference tables to avoid ambiguity
     const { count: completedLessons, error: completedError } = await supabase
       .from('user_lesson_progress')
-      .select('lesson_id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('completed', true)
-      .in('lesson_id', lessonIds.map(l => l.id));
+      .select('user_lesson_progress.lesson_id', { count: 'exact', head: true })
+      .eq('user_lesson_progress.user_id', userId)
+      .eq('user_lesson_progress.completed', true)
+      .in('user_lesson_progress.lesson_id', lessonIds.map(l => l.id));
       
     if (completedError) throw completedError;
     
@@ -263,10 +266,10 @@ export const certificateService = {
       // Get completed lessons count with explicit table reference
       const { count: completedCount, error: countError } = await supabase
         .from('user_lesson_progress')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .eq('completed', true)
-        .in('lesson_id', lessonIds);
+        .select('user_lesson_progress.id', { count: 'exact', head: true })
+        .eq('user_lesson_progress.user_id', userId)
+        .eq('user_lesson_progress.completed', true)
+        .in('user_lesson_progress.lesson_id', lessonIds);
         
       if (countError) throw countError;
       
@@ -275,13 +278,17 @@ export const certificateService = {
         throw new Error(`Not all lessons completed (${completedCount}/${lessons.length})`);
       }
       
-      // Generate certificate
+      // Generate certificate - this calls the RPC function in Supabase
+      // The function uses auth.uid() internally, so we need to ensure the user is logged in
       const { data, error } = await supabase.rpc(
         'generate_certificate',
         { course_id: courseId }
       );
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error in generate_certificate RPC call:', error);
+        throw error;
+      }
       
       return data;
     } catch (error) {
