@@ -102,7 +102,7 @@ const useCourseDetail = (courseId: string | undefined) => {
           
           setEnrollment(enrollmentData);
           
-          // FIX: Corrected the query format for selecting lesson progress
+          // Corrected query format for selecting lesson progress
           const { data: progressData, error: progressError } = await supabase
             .from('user_lesson_progress')
             .select('lesson_id, completed')
@@ -131,6 +131,7 @@ const useCourseDetail = (courseId: string | undefined) => {
             setLessons(lessonsData);
           }
           
+          // Check for existing certificate
           const { data: certificateData, error: certificateError } = await supabase
             .from('certificates')
             .select('id')
@@ -167,6 +168,32 @@ const useCourseDetail = (courseId: string | undefined) => {
         if (user && courseId) {
           console.log('Creating new enrollment for user:', user.id, 'course:', courseId);
           
+          // First check if enrollment already exists
+          const { data: existingEnrollment, error: checkError } = await supabase
+            .from('enrollments')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('course_id', courseId)
+            .maybeSingle();
+            
+          if (checkError) throw checkError;
+          
+          // If already enrolled, just update the UI
+          if (existingEnrollment) {
+            setEnrollment({
+              id: existingEnrollment.id,
+              progress: 0,
+              completed: false
+            });
+            
+            toast({
+              title: 'Already enrolled',
+              description: 'You were already enrolled in this course',
+            });
+            return;
+          }
+          
+          // Create new enrollment
           const { data, error } = await supabase
             .from('enrollments')
             .insert({
@@ -205,6 +232,7 @@ const useCourseDetail = (courseId: string | undefined) => {
         if (user && courseId && enrollment.id) {
           console.log('Deleting enrollment for user:', user.id, 'course:', courseId, 'enrollment id:', enrollment.id);
           
+          // Delete enrollment
           const { error: deleteError } = await supabase
             .from('enrollments')
             .delete()
@@ -212,6 +240,7 @@ const useCourseDetail = (courseId: string | undefined) => {
             
           if (deleteError) throw deleteError;
           
+          // Delete lesson progress
           const { error: progressDeleteError } = await supabase
             .from('user_lesson_progress')
             .delete()
@@ -270,6 +299,7 @@ const useCourseDetail = (courseId: string | undefined) => {
         if (!user || !courseId) return;
         
         try {
+          // Update enrollment progress
           await supabase
             .from('enrollments')
             .update({ 
@@ -277,14 +307,23 @@ const useCourseDetail = (courseId: string | undefined) => {
               completed: progressPercentage === 100,
               last_accessed: new Date().toISOString()
             })
-            .eq('user_id', user.id)
-            .eq('course_id', courseId);
+            .eq('id', enrollment.id);
+            
+          // Update lesson progress
+          await supabase
+            .from('user_lesson_progress')
+            .upsert({
+              user_id: user.id,
+              lesson_id: lessonId,
+              completed: completed,
+              last_accessed: new Date().toISOString()
+            }, { onConflict: 'user_id,lesson_id' });
             
           if (progressPercentage === 100 && !certificateId) {
             await generateCertificate();
           }
         } catch (error) {
-          console.error("Failed to update enrollment:", error);
+          console.error("Failed to update progress:", error);
         }
       }
     }
@@ -317,10 +356,10 @@ const useCourseDetail = (courseId: string | undefined) => {
       
       const { data: progressData, error: progressError } = await supabase
         .from('user_lesson_progress')
-        .select('user_lesson_progress.lesson_id, user_lesson_progress.completed')
-        .eq('user_lesson_progress.user_id', user.id)
-        .eq('user_lesson_progress.completed', true)
-        .in('user_lesson_progress.lesson_id', lessonIds);
+        .select('lesson_id, completed')
+        .eq('user_id', user.id)
+        .eq('completed', true)
+        .in('lesson_id', lessonIds);
         
       if (progressError) throw progressError;
       
@@ -346,6 +385,7 @@ const useCourseDetail = (courseId: string | undefined) => {
         return;
       }
       
+      // Mark all lessons as complete
       for (const lessonId of lessonIds) {
         await supabase
           .from('user_lesson_progress')
@@ -357,6 +397,7 @@ const useCourseDetail = (courseId: string | undefined) => {
           }, { onConflict: 'user_id,lesson_id' });
       }
       
+      // Update enrollment as completed
       await supabase
         .from('enrollments')
         .update({ 
@@ -367,6 +408,7 @@ const useCourseDetail = (courseId: string | undefined) => {
         .eq('user_id', user.id)
         .eq('course_id', courseId);
       
+      // Call the generate_certificate function
       console.log('Calling generate_certificate RPC with course_id:', courseId);
       const { data, error } = await supabase.rpc(
         'generate_certificate',

@@ -33,12 +33,31 @@ const EnrollButton = ({ courseId, isEnrolled, onEnrollmentChange }: EnrollButton
 
     try {
       if (isEnrolled) {
-        // Unenroll from course using Supabase
+        // Get the enrollment ID first before trying to delete
+        const { data: enrollmentData, error: fetchError } = await supabase
+          .from('enrollments')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('course_id', courseId)
+          .maybeSingle();
+          
+        if (fetchError) throw fetchError;
+        
+        if (!enrollmentData) {
+          toast({
+            title: 'Error',
+            description: 'Could not find your enrollment record',
+            variant: 'destructive',
+          });
+          setLoading(false);
+          return;
+        }
+        
+        // Unenroll from course using the enrollment ID
         const { error } = await supabase
           .from('enrollments')
           .delete()
-          .eq('user_id', user.id)
-          .eq('course_id', courseId);
+          .eq('id', enrollmentData.id);
           
         if (error) throw error;
           
