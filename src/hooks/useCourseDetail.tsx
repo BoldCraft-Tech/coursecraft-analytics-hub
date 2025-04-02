@@ -33,6 +33,11 @@ interface Enrollment {
   completed: boolean;
 }
 
+interface LessonProgress {
+  lesson_id: string;
+  completed: boolean;
+}
+
 const useCourseDetail = (courseId: string | undefined) => {
   const [course, setCourse] = useState<Course | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -88,23 +93,29 @@ const useCourseDetail = (courseId: string | undefined) => {
             
           if (progressError) throw progressError;
           
-          // Use type assertion to handle the TypeScript error
-          const typedProgressData = progressData as Array<{lesson_id: string, completed: boolean}>;
+          // Add explicit type assertion with type guard
+          const typedProgressData = progressData as LessonProgress[];
           
-          const completionMap = typedProgressData.reduce((map: Record<string, boolean>, item) => {
-            map[item.lesson_id] = item.completed;
-            return map;
-          }, {});
-          
-          const lessonsWithProgress = lessonsData.map(lesson => ({
-            ...lesson,
-            completed: completionMap[lesson.id] || false
-          }));
-          
-          setLessons(lessonsWithProgress);
-          
-          const completed = typedProgressData.filter(p => p.completed).length;
-          setCompletedLessons(completed);
+          if (Array.isArray(typedProgressData)) {
+            const completionMap = typedProgressData.reduce((map: Record<string, boolean>, item) => {
+              if (item && typeof item === 'object' && 'lesson_id' in item && 'completed' in item) {
+                map[item.lesson_id] = item.completed;
+              }
+              return map;
+            }, {});
+            
+            const lessonsWithProgress = lessonsData.map(lesson => ({
+              ...lesson,
+              completed: completionMap[lesson.id] || false
+            }));
+            
+            setLessons(lessonsWithProgress);
+            
+            const completed = typedProgressData.filter(p => p && typeof p === 'object' && 'completed' in p && p.completed).length;
+            setCompletedLessons(completed);
+          } else {
+            setLessons(lessonsData);
+          }
           
           const { data: certificateData, error: certificateError } = await supabase
             .from('certificates')
@@ -299,10 +310,16 @@ const useCourseDetail = (courseId: string | undefined) => {
         
       if (progressError) throw progressError;
       
-      // Use type assertion to handle the TypeScript error
-      const typedProgressData = progressData as Array<{lesson_id: string, completed: boolean}>;
+      // Add explicit type assertion with type guard
+      const typedProgressData = progressData as LessonProgress[];
       
-      const completedLessonIds = typedProgressData.map(progress => progress.lesson_id);
+      if (!Array.isArray(typedProgressData)) {
+        throw new Error('Invalid progress data returned');
+      }
+      
+      const completedLessonIds = typedProgressData
+        .filter(p => p && typeof p === 'object' && 'lesson_id' in p)
+        .map(progress => progress.lesson_id);
       
       console.log('Certificate generation check:', {
         lessonIds,

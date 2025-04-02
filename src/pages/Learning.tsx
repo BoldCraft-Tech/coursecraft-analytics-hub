@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/layout/Navbar';
@@ -51,7 +50,6 @@ const Learning = () => {
     }
   }, [keywords]);
 
-  // Fetch courses when search is performed
   useEffect(() => {
     if (searchPerformed && message) {
       searchCoursesByKeywords(keywords);
@@ -65,34 +63,70 @@ const Learning = () => {
     try {
       console.log('Searching for courses with keywords:', searchKeywords);
       
-      // Fetch all courses initially
-      const { data: courses, error } = await supabase
+      const detectedLevel = extractLevel(searchKeywords.join(' '));
+      console.log('Detected level from keywords:', detectedLevel);
+      
+      let query = supabase
         .from('courses')
         .select('*');
+      
+      if (detectedLevel) {
+        query = query.eq('level', detectedLevel);
+        console.log('Filtering courses by level:', detectedLevel);
+      }
+      
+      const { data: courses, error } = await query;
         
       if (error) throw error;
       
       if (!courses || courses.length === 0) {
+        console.log('No courses found matching the level filter');
         setMatchedCourses([]);
         setIsLoadingCourses(false);
         return;
       }
       
-      // Filter courses based on keywords (in title, description, category, level)
-      const lowerKeywords = searchKeywords.map(kw => kw.toLowerCase());
-      
-      const matchedResults = courses.filter(course => {
-        // Check if any keyword matches in title or description or category or level
-        return lowerKeywords.some(keyword => 
-          course.title.toLowerCase().includes(keyword) ||
-          course.description.toLowerCase().includes(keyword) ||
-          course.category.toLowerCase().includes(keyword) ||
-          course.level.toLowerCase().includes(keyword)
-        );
-      });
-      
-      console.log(`Found ${matchedResults.length} courses matching keywords`);
-      setMatchedCourses(matchedResults);
+      if (detectedLevel) {
+        console.log(`Found ${courses.length} courses matching ${detectedLevel} level`);
+        
+        const nonLevelKeywords = searchKeywords.filter(keyword => {
+          const lowerKeyword = keyword.toLowerCase();
+          return !Object.values(LEVEL_KEYWORDS).flat().some(levelWord => 
+            lowerKeyword.includes(levelWord.toLowerCase())
+          );
+        });
+        
+        if (nonLevelKeywords.length > 0) {
+          console.log('Further filtering by non-level keywords:', nonLevelKeywords);
+          
+          const filteredResults = courses.filter(course => {
+            return nonLevelKeywords.some(keyword => 
+              course.title.toLowerCase().includes(keyword.toLowerCase()) ||
+              course.description.toLowerCase().includes(keyword.toLowerCase()) ||
+              course.category.toLowerCase().includes(keyword.toLowerCase())
+            );
+          });
+          
+          console.log(`Found ${filteredResults.length} courses after additional keyword filtering`);
+          setMatchedCourses(filteredResults.length > 0 ? filteredResults : courses);
+        } else {
+          setMatchedCourses(courses);
+        }
+      } else {
+        const lowerKeywords = searchKeywords.map(kw => kw.toLowerCase());
+        
+        const matchedResults = courses.filter(course => {
+          return lowerKeywords.some(keyword => 
+            course.title.toLowerCase().includes(keyword) ||
+            course.description.toLowerCase().includes(keyword) ||
+            course.category.toLowerCase().includes(keyword) ||
+            course.level.toLowerCase().includes(keyword)
+          );
+        });
+        
+        console.log(`Found ${matchedResults.length} courses matching general keywords`);
+        setMatchedCourses(matchedResults);
+      }
     } catch (error) {
       console.error('Error searching courses:', error);
       toast({
@@ -128,7 +162,6 @@ const Learning = () => {
       
       await searchCoursesByKeywords(extractedKeywords);
       
-      // Generate response based on search results
       let responseText = '';
       if (matchedCourses.length > 0) {
         responseText = `I found ${matchedCourses.length} courses that match your keywords. Take a look at these courses related to ${extractedInterests || 'your interests'}!`;
@@ -182,7 +215,7 @@ const Learning = () => {
         }
       }
     }
-    return 'Technology'; // Default
+    return ''; // Return empty string instead of default to enable more precise filtering
   };
 
   const extractLevel = (text: string): string => {
@@ -195,7 +228,7 @@ const Learning = () => {
         }
       }
     }
-    return 'Beginner'; // Default
+    return ''; // Return empty string instead of default to enable more precise filtering
   };
 
   return (
