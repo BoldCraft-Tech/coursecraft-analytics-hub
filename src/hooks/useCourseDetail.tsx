@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -36,6 +35,22 @@ interface Enrollment {
 interface LessonProgress {
   lesson_id: string;
   completed: boolean;
+}
+
+function safeLessonProgressCast(data: any[]): LessonProgress[] {
+  if (!Array.isArray(data)) return [];
+  
+  return data
+    .filter(item => 
+      item && 
+      typeof item === 'object' && 
+      'lesson_id' in item && 
+      'completed' in item
+    )
+    .map(item => ({
+      lesson_id: item.lesson_id,
+      completed: item.completed
+    }));
 }
 
 const useCourseDetail = (courseId: string | undefined) => {
@@ -93,14 +108,11 @@ const useCourseDetail = (courseId: string | undefined) => {
             
           if (progressError) throw progressError;
           
-          // Add explicit type assertion with type guard
-          const typedProgressData = progressData as LessonProgress[];
+          const typedProgressData = safeLessonProgressCast(progressData);
           
-          if (Array.isArray(typedProgressData)) {
+          if (typedProgressData.length > 0) {
             const completionMap = typedProgressData.reduce((map: Record<string, boolean>, item) => {
-              if (item && typeof item === 'object' && 'lesson_id' in item && 'completed' in item) {
-                map[item.lesson_id] = item.completed;
-              }
+              map[item.lesson_id] = item.completed;
               return map;
             }, {});
             
@@ -111,7 +123,7 @@ const useCourseDetail = (courseId: string | undefined) => {
             
             setLessons(lessonsWithProgress);
             
-            const completed = typedProgressData.filter(p => p && typeof p === 'object' && 'completed' in p && p.completed).length;
+            const completed = typedProgressData.filter(p => p.completed).length;
             setCompletedLessons(completed);
           } else {
             setLessons(lessonsData);
@@ -310,16 +322,9 @@ const useCourseDetail = (courseId: string | undefined) => {
         
       if (progressError) throw progressError;
       
-      // Add explicit type assertion with type guard
-      const typedProgressData = progressData as LessonProgress[];
+      const typedProgressData = safeLessonProgressCast(progressData);
       
-      if (!Array.isArray(typedProgressData)) {
-        throw new Error('Invalid progress data returned');
-      }
-      
-      const completedLessonIds = typedProgressData
-        .filter(p => p && typeof p === 'object' && 'lesson_id' in p)
-        .map(progress => progress.lesson_id);
+      const completedLessonIds = typedProgressData.map(progress => progress.lesson_id);
       
       console.log('Certificate generation check:', {
         lessonIds,
