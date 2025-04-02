@@ -5,7 +5,7 @@ import { BookOpen, CheckCircle, Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { enrollmentService } from '@/services/api';
+import { supabase } from '@/integrations/supabase/client';
 
 interface EnrollButtonProps {
   courseId: string;
@@ -33,8 +33,14 @@ const EnrollButton = ({ courseId, isEnrolled, onEnrollmentChange }: EnrollButton
 
     try {
       if (isEnrolled) {
-        // Unenroll from course
-        await enrollmentService.delete(user.id, courseId);
+        // Unenroll from course using Supabase
+        const { error } = await supabase
+          .from('enrollments')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('course_id', courseId);
+          
+        if (error) throw error;
           
         toast({
           title: 'Unenrolled successfully',
@@ -43,8 +49,17 @@ const EnrollButton = ({ courseId, isEnrolled, onEnrollmentChange }: EnrollButton
         
         onEnrollmentChange(false);
       } else {
-        // Enroll in course
-        await enrollmentService.create(user.id, courseId);
+        // Enroll in course using Supabase
+        const { error } = await supabase
+          .from('enrollments')
+          .insert({
+            user_id: user.id,
+            course_id: courseId,
+            progress: 0, 
+            completed: false
+          });
+          
+        if (error) throw error;
           
         toast({
           title: 'Enrolled successfully',
