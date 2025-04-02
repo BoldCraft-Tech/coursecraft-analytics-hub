@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -101,10 +102,11 @@ const useCourseDetail = (courseId: string | undefined) => {
           
           setEnrollment(enrollmentData);
           
+          // FIX: Corrected the query format for selecting lesson progress
           const { data: progressData, error: progressError } = await supabase
             .from('user_lesson_progress')
-            .select('user_lesson_progress.lesson_id, user_lesson_progress.completed')
-            .eq('user_lesson_progress.user_id', user.id);
+            .select('lesson_id, completed')
+            .eq('user_id', user.id);
             
           if (progressError) throw progressError;
           
