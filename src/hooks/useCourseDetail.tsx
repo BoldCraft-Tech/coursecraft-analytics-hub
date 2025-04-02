@@ -102,7 +102,7 @@ const useCourseDetail = (courseId: string | undefined) => {
           
           setEnrollment(enrollmentData);
           
-          // Corrected query format for selecting lesson progress
+          // Fix: Query for lesson progress
           const { data: progressData, error: progressError } = await supabase
             .from('user_lesson_progress')
             .select('lesson_id, completed')
@@ -125,7 +125,12 @@ const useCourseDetail = (courseId: string | undefined) => {
             
             setLessons(lessonsWithProgress);
             
-            const completed = typedProgressData.filter(p => p.completed).length;
+            // Count only completed lessons for THIS course
+            const courseLessonIds = lessonsData.map(lesson => lesson.id);
+            const completed = typedProgressData
+              .filter(p => p.completed && courseLessonIds.includes(p.lesson_id))
+              .length;
+              
             setCompletedLessons(completed);
           } else {
             setLessons(lessonsData);
@@ -193,7 +198,7 @@ const useCourseDetail = (courseId: string | undefined) => {
             return;
           }
           
-          // Create new enrollment
+          // Create new enrollment with initial progress of 0
           const { data, error } = await supabase
             .from('enrollments')
             .insert({
@@ -274,41 +279,34 @@ const useCourseDetail = (courseId: string | undefined) => {
   };
 
   const handleLessonComplete = async (lessonId: string, completed: boolean) => {
-    setLessons(prev => prev.map(lesson => 
-      lesson.id === lessonId 
-        ? { ...lesson, completed } 
-        : lesson
-    ));
+    if (!user || !courseId) return;
     
-    const newCompletedCount = completed 
-      ? completedLessons + 1 
-      : Math.max(0, completedLessons - 1);
-    
-    setCompletedLessons(newCompletedCount);
-    
-    if (lessons.length > 0) {
-      const progressPercentage = Math.round((newCompletedCount / lessons.length) * 100);
+    try {
+      // Update the lesson state first for a responsive UI
+      setLessons(prev => prev.map(lesson => 
+        lesson.id === lessonId 
+          ? { ...lesson, completed } 
+          : lesson
+      ));
       
-      if (enrollment) {
-        setEnrollment(prev => prev ? {
-          ...prev,
-          progress: progressPercentage,
-          completed: progressPercentage === 100
-        } : null);
+      // Calculate new completed count
+      const newCompletedCount = completed 
+        ? completedLessons + 1 
+        : Math.max(0, completedLessons - 1);
+      
+      setCompletedLessons(newCompletedCount);
+      
+      // Calculate accurate progress percentage
+      if (lessons.length > 0) {
+        const progressPercentage = Math.round((newCompletedCount / lessons.length) * 100);
         
-        if (!user || !courseId) return;
-        
-        try {
-          // Update enrollment progress
-          await supabase
-            .from('enrollments')
-            .update({ 
-              progress: progressPercentage,
-              completed: progressPercentage === 100,
-              last_accessed: new Date().toISOString()
-            })
-            .eq('id', enrollment.id);
-            
+        if (enrollment) {
+          setEnrollment(prev => prev ? {
+            ...prev,
+            progress: progressPercentage,
+            completed: progressPercentage === 100
+          } : null);
+          
           // Update lesson progress
           await supabase
             .from('user_lesson_progress')
@@ -319,13 +317,28 @@ const useCourseDetail = (courseId: string | undefined) => {
               last_accessed: new Date().toISOString()
             }, { onConflict: 'user_id,lesson_id' });
             
+          // Update enrollment progress
+          await supabase
+            .from('enrollments')
+            .update({ 
+              progress: progressPercentage,
+              completed: progressPercentage === 100,
+              last_accessed: new Date().toISOString()
+            })
+            .eq('id', enrollment.id);
+            
           if (progressPercentage === 100 && !certificateId) {
             await generateCertificate();
           }
-        } catch (error) {
-          console.error("Failed to update progress:", error);
         }
       }
+    } catch (error) {
+      console.error("Failed to update progress:", error);
+      toast({
+        title: 'Error updating progress',
+        description: 'Failed to update your lesson progress',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -335,6 +348,7 @@ const useCourseDetail = (courseId: string | undefined) => {
     setLoadingCertificate(true);
     
     try {
+      // Get all lesson IDs for this course
       const { data: lessonData, error: lessonError } = await supabase
         .from('lessons')
         .select('id')
@@ -354,6 +368,7 @@ const useCourseDetail = (courseId: string | undefined) => {
         return;
       }
       
+      // Get all progress records for this user for lessons in this course
       const { data: progressData, error: progressError } = await supabase
         .from('user_lesson_progress')
         .select('lesson_id, completed')
@@ -364,7 +379,6 @@ const useCourseDetail = (courseId: string | undefined) => {
       if (progressError) throw progressError;
       
       const typedProgressData = safeLessonProgressCast(progressData);
-      
       const completedLessonIds = typedProgressData.map(progress => progress.lesson_id);
       
       console.log('Certificate generation check:', {
@@ -374,6 +388,7 @@ const useCourseDetail = (courseId: string | undefined) => {
         allCompleted: lessonIds.every(id => completedLessonIds.includes(id))
       });
       
+      // Check if all lessons are completed
       const incompleteCount = lessonIds.length - completedLessonIds.length;
       if (incompleteCount > 0) {
         toast({
@@ -408,22 +423,27 @@ const useCourseDetail = (courseId: string | undefined) => {
         .eq('user_id', user.id)
         .eq('course_id', courseId);
       
-      // Call the generate_certificate function
-      console.log('Calling generate_certificate RPC with course_id:', courseId);
-      const { data, error } = await supabase.rpc(
-        'generate_certificate',
-        { course_id: courseId }
-      );
+      // Create certificate directly instead of using RPC
+      const { data: certificateData, error: certificateError } = await supabase
+        .from('certificates')
+        .upsert(
+          { 
+            user_id: user.id, 
+            course_id: courseId,
+            certificate_url: `https://example.com/cert/${user.id}/${courseId}`,
+            issue_date: new Date().toISOString()
+          },
+          { 
+            onConflict: 'user_id,course_id',
+            returning: 'representation' 
+          }
+        )
+        .select();
+        
+      if (certificateError) throw certificateError;
       
-      if (error) {
-        console.error('Error in generate_certificate RPC call:', error);
-        throw error;
-      }
-      
-      console.log('Certificate generation result:', data);
-      
-      if (data) {
-        setCertificateId(data);
+      if (certificateData && certificateData.length > 0) {
+        setCertificateId(certificateData[0].id);
         toast({
           title: 'Certificate generated!',
           description: 'Congratulations on completing this course',
@@ -432,6 +452,7 @@ const useCourseDetail = (courseId: string | undefined) => {
         toast({
           title: 'Error generating certificate',
           description: 'Please try again later',
+          variant: 'destructive',
         });
       }
     } catch (error: any) {

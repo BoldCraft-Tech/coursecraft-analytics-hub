@@ -89,7 +89,7 @@ const EnrollButton = ({ courseId, isEnrolled, onEnrollmentChange }: EnrollButton
           return;
         }
           
-        // Enroll in course using Supabase
+        // Enroll in course using Supabase - set initial progress to 0
         const { error } = await supabase
           .from('enrollments')
           .insert({

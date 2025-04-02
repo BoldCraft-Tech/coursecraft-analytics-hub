@@ -45,11 +45,20 @@ const MyCertificates = () => {
         setLoading(true);
         console.log('Fetching certificates for user:', user.id);
         
+        // Fix: Use explicit join syntax for courses
         const { data, error } = await supabase
           .from('certificates')
           .select(`
-            *,
-            course:courses(id, title, category, level)
+            id,
+            issue_date,
+            certificate_url,
+            course_id,
+            courses (
+              id, 
+              title, 
+              category, 
+              level
+            )
           `)
           .eq('user_id', user.id)
           .order('issue_date', { ascending: false });
@@ -57,12 +66,26 @@ const MyCertificates = () => {
         if (error) throw error;
 
         console.log('Certificates data:', data);
-        setCertificates(data as Certificate[]);
         
-        if (highlightedCourseId && data && data.length > 0) {
-          const highlighted = data.find(cert => cert.course.id === highlightedCourseId);
+        // Transform the data to match the expected interface
+        const formattedCertificates = data.map((cert: any) => ({
+          id: cert.id,
+          issue_date: cert.issue_date,
+          certificate_url: cert.certificate_url || `https://example.com/cert/${user.id}/${cert.course_id}`,
+          course: {
+            id: cert.courses.id,
+            title: cert.courses.title,
+            category: cert.courses.category,
+            level: cert.courses.level
+          }
+        }));
+        
+        setCertificates(formattedCertificates);
+        
+        if (highlightedCourseId && formattedCertificates.length > 0) {
+          const highlighted = formattedCertificates.find(cert => cert.course.id === highlightedCourseId);
           if (highlighted) {
-            setSelectedCertificate(highlighted as Certificate);
+            setSelectedCertificate(highlighted);
             setShowCertificateModal(true);
           }
         }
@@ -183,6 +206,9 @@ const MyCertificates = () => {
             
           if (!error && data) {
             setUserName(data.full_name || user.email || 'Student');
+          } else {
+            // Fallback to email if profile not found
+            setUserName(user.email || 'Student');
           }
         };
         
